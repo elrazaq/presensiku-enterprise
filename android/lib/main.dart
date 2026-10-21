@@ -1,12 +1,24 @@
 import 'package:flutter/material.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'core/constants.dart';
+import 'models/employee.dart';
+import 'services/storage_service.dart';
+import 'screens/login_screen.dart';
+import 'screens/home_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const PresensiKuApp());
+  await initializeDateFormatting('id_ID', null);
+
+  final token = await StorageService.getToken();
+  final user = await StorageService.getUser();
+
+  runApp(PresensiKuApp(initialUser: token != null ? user : null));
 }
 
 class PresensiKuApp extends StatelessWidget {
-  const PresensiKuApp({super.key});
+  final Employee? initialUser;
+  const PresensiKuApp({super.key, this.initialUser});
 
   @override
   Widget build(BuildContext context) {
@@ -15,45 +27,19 @@ class PresensiKuApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0284C7),
+          seedColor: AppColors.deepNavy,
+          primary: AppColors.deepNavy,
+          secondary: AppColors.oceanTeal,
+          surface: Colors.white,
           brightness: Brightness.light,
         ),
+        scaffoldBackgroundColor: AppColors.background,
         useMaterial3: true,
+        fontFamily: 'sans-serif',
       ),
-      home: const PlaceholderHomeScreen(),
-    );
-  }
-}
-
-class PlaceholderHomeScreen extends StatelessWidget {
-  const PlaceholderHomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        title: const Text(
-          'PresensiKu Enterprise',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            fontSize: 16,
-            color: Color(0xFF0F172A),
-          ),
-        ),
-      ),
-      body: const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24.0),
-          child: Text(
-            'Skeleton Flutter App Siap Dikembangkan.\nModul Login, GPS Geofencing (Anti-Mock GPS), & QR Scanner akan dibangun bertahap sesuai Rencana Implementasi.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF475569), fontSize: 14),
-          ),
-        ),
-      ),
+      home: initialUser != null
+          ? HomeScreen(employee: initialUser!)
+          : const LoginScreen(),
     );
   }
 }

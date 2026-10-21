@@ -1,0 +1,305 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import '../core/constants.dart';
+import '../services/api_service.dart';
+import '../services/location_service.dart';
+import 'attendance_result_modal.dart';
+
+class SelfieAttendanceScreen extends StatefulWidget {
+  const SelfieAttendanceScreen({super.key});
+
+  @override
+  State<SelfieAttendanceScreen> createState() => _SelfieAttendanceScreenState();
+}
+
+class _SelfieAttendanceScreenState extends State<SelfieAttendanceScreen> {
+  bool _isLoadingGps = true;
+  bool _isSubmitting = false;
+  Position? _currentPosition;
+  String _gpsStatus = 'Mencari koordinat presisi...';
+  bool _isInGeofence = false;
+  double _distanceMeters = 0.0;
+
+  // Koordinat acuan kantor (Ruang Server & IT)
+  final double officeLat = -6.2088;
+  final double officeLon = 106.8456;
+  final double allowedRadiusMeters = 30.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkLocation();
+  }
+
+  Future<void> _checkLocation() async {
+    setState(() {
+      _isLoadingGps = true;
+      _gpsStatus = 'Mengkalibrasi GPS & proteksi Anti-Mock...';
+    });
+
+    try {
+      final pos = await LocationService.getCurrentPositionWithAntiMock();
+      final dist = LocationService.getDistanceToOffice(
+        currentLat: pos.latitude,
+        currentLon: pos.longitude,
+        officeLat: officeLat,
+        officeLon: officeLon,
+      );
+
+      setState(() {
+        _currentPosition = pos;
+        _distanceMeters = dist;
+        _isInGeofence = dist <= allowedRadiusMeters;
+        _isLoadingGps = false;
+        _gpsStatus = _isInGeofence
+            ? 'Lokasi Valid (${dist.toStringAsFixed(1)}m dari Titik Kantor)'
+            : 'Di Luar Radius (${dist.toStringAsFixed(1)}m, Maks. ${allowedRadiusMeters.toInt()}m)';
+      });
+    } on MockGpsDetectedException catch (e) {
+      setState(() {
+        _isLoadingGps = false;
+        _gpsStatus = 'Fake GPS terdeteksi!';
+      });
+
+      await ApiService.reportSecurityViolation(
+        violationType: 'MOCK_GPS_DETECTED',
+        detail: 'Deteksi Fake GPS saat mencoba Absen Selfie',
+        latitude: e.latitude,
+        longitude: e.longitude,
+      );
+
+      if (mounted) {
+        _showMockGpsAlert(e.message);
+      }
+    } catch (e) {
+      setState(() {
+        _isLoadingGps = false;
+        _gpsStatus = 'Gagal membaca GPS: $e';
+      });
+    }
+  }
+
+  void _showMockGpsAlert(String msg) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        icon: const Icon(Icons.shield_outlined, size: 48, color: AppColors.danger),
+        title: const Text('Pelanggaran Integritas'),
+        content: Text(msg, textAlign: TextAlign.center),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger, foregroundColor: Colors.white),
+            child: const Text('Kembali'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submitSelfieAttendance() async {
+    if (_currentPosition == null) {
+      await _checkLocation();
+      if (_currentPosition == null) return;
+    }
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      // Dummy selfie string avatar (base64 image placeholder)
+      final dummyBase64Selfie = 'data:image/jpeg;base64,' +
+          base64Encode(utf8.encode('PRESENSI_SELFIE_TIMESTAMP_${DateTime.now().toIso8601String()}'));
+
+      final res = await ApiService.checkIn(
+        method: 'SELFIE',
+        selfieBase64: dummyBase64Selfie,
+        latitude: _currentPosition!.latitude,
+        longitude: _currentPosition!.longitude,
+      );
+
+      if (!mounted) return;
+
+      if (res.success && res.data != null) {
+        Navigator.pop(context);
+        AttendanceResultModal.show(context, record: res.data!);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(res.message), backgroundColor: AppColors.wine),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.wine),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.deepNavy,
+      appBar: AppBar(
+        backgroundColor: AppColors.deepNavy,
+        foregroundColor: Colors.white,
+        title: const Text('Presensi Foto Wajah (Selfie)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _isLoadingGps ? null : _checkLocation,
+            tooltip: 'Kalibrasi Ulang GPS',
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // 1. Live Geofence GPS Pill Indicator
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: _isInGeofence ? AppColors.oceanTeal.withOpacity(0.2) : AppColors.wine.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: _isInGeofence ? AppColors.oceanTeal : AppColors.wine,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _isInGeofence ? Icons.location_on : Icons.location_off,
+                  size: 20,
+                  color: _isInGeofence ? AppColors.cream : Colors.white,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    _gpsStatus,
+                    style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                if (_isLoadingGps)
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  ),
+              ],
+            ),
+          ),
+
+          // 2. Camera View & Facial Circular Guide
+          Expanded(
+            child: Center(
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Circular Facial Guide Border
+                  Container(
+                    width: 280,
+                    height: 280,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: _isInGeofence ? AppColors.oceanTeal : Colors.white30,
+                        width: 4,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (_isInGeofence ? AppColors.oceanTeal : Colors.black).withOpacity(0.3),
+                          blurRadius: 24,
+                        ),
+                      ],
+                    ),
+                    child: ClipOval(
+                      child: Container(
+                        color: const Color(0xFF162D50),
+                        child: Icon(
+                          Icons.face_retouching_natural_rounded,
+                          size: 160,
+                          color: Colors.white.withOpacity(0.4),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  Positioned(
+                    bottom: 20,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black87,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text(
+                        'Posisikan wajah Anda di dalam lingkaran',
+                        style: TextStyle(color: Colors.white70, fontSize: 11),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // 3. Bottom Action Shutter
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+            decoration: const BoxDecoration(
+              color: Color(0xFF0C1F38),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+            ),
+            child: SafeArea(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.flash_off, color: Colors.white70),
+                    onPressed: () {},
+                  ),
+                  // Big Shutter Button
+                  GestureDetector(
+                    onTap: (_isSubmitting || _isLoadingGps) ? null : _submitSelfieAttendance,
+                    child: Container(
+                      width: 72,
+                      height: 72,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _isInGeofence ? AppColors.wine : Colors.grey.shade700,
+                        border: Border.all(color: Colors.white, width: 4),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.wine.withOpacity(0.5),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: _isSubmitting
+                            ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 3)
+                            : const Icon(Icons.camera_alt, color: Colors.white, size: 32),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.flip_camera_ios, color: Colors.white70),
+                    onPressed: () {},
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
