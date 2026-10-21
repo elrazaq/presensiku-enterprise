@@ -1,41 +1,126 @@
 # PresensiKu Enterprise — Commercial Monorepo
 
-Sistem Presensi Pegawai Terintegrasi (Siap Jual / Commercial Edition) dengan validasi ganda **Geofencing GPS (Haversine + Anti-Mock/Fake GPS)**, **Device ID Binding (Anti-Titip Absen)**, dan **Dynamic QR Code TOTP (HMAC-SHA256 Auto-Refresh 30 Detik)**.
+Sistem Manajemen Kehadiran & Audit Integritas Pegawai tingkat Enterprise yang dirancang untuk mencegah segala bentuk kecurangan absensi (*anti-fraud*). Dilengkapi dengan validasi **Geofencing GPS (Haversine Formula + Anti-Mock/Fake GPS)**, **Device ID Binding (Anti-Titip Absen)**, **Dynamic QR Code TOTP (HMAC-SHA256 Auto-Refresh 30 Detik)**, serta arsitektur backend ganda **Golang REST API & gRPC High Performance**.
 
-## Struktur Folder Utama (`D:\presensiku-enterprise`)
+---
+
+## 📸 Tangkapan Layar Halaman Utama
+
+Berikut adalah dokumentasi visual dari modul-modul inti yang telah diimplementasikan dalam PresensiKu Enterprise:
+
+### 1. Dashboard Eksekutif & Statistik Disiplin
+![Dashboard Eksekutif](docs/screenshots/01-dashboard-eksekutif.png)
+* **Penjelasan:** Menampilkan ringkasan KPI eksekutif secara real-time, meliputi total pegawai, perangkat terverifikasi (*Device Binding*), presensi harian, dan jumlah pelanggaran yang dicegah. Dilengkapi grafik visual trend kedisiplinan 7 hari terakhir, komposisi metode presensi, serta kalkulasi Indeks Kepatuhan Kehadiran yang dihitung secara dinamis dari database.
+
+---
+
+### 2. Log Presensi Pegawai & Audit Bukti Wajah
+![Log Presensi Pegawai](docs/screenshots/02-log-presensi.png)
+* **Penjelasan:** Rekam jejak kehadiran harian yang mendokumentasikan jam masuk dan jam pulang secara akurat. Admin dapat memantau status ketepatan waktu (*Tepat Waktu / Terlambat*), metode presensi yang digunakan (*Selfie / QR Kiosk*), radius jarak dari kantor saat absensi, serta melakukan audit keabsahan foto wajah pegawai untuk mencegah manipulasi.
+
+---
+
+### 3. Manajemen Shift Kerja & Batas Dispensasi
+![Manajemen Shift](docs/screenshots/03-manajemen-shift.png)
+* **Penjelasan:** Modul pengaturan jam kerja fleksibel (Shift Reguler Pagi, Shift Siang, dsb.) dengan konfigurasi toleransi keterlambatan (misal 15 menit). Mengintegrasikan aturan *cut-off* setengah hari kerja (maksimal jam 12:00) di mana pegawai yang belum absen masuk tidak diperkenankan langsung absen pulang dan otomatis dinyatakan tidak hadir, kecuali mengajukan dispensasi khusus (kuota maksimal 3x).
+
+---
+
+### 4. Peta Geofence Radius Kantor Interaktif
+![Geofence Radius Kantor](docs/screenshots/04-geofence-radius.png)
+* **Penjelasan:** Visualisasi spasial interaktif menggunakan OpenStreetMap & Leaflet untuk menentukan titik koordinat presisi kantor beserta radius toleransi kehadiran (misal 20-30 meter). Dilengkapi pencarian nama lokasi/jalan otomatis dan indikator proteksi Anti-Mock GPS aktif.
+
+---
+
+### 5. Audit Integritas Keamanan & Anti-Fake GPS
+![Audit Pelanggaran](docs/screenshots/05-audit-pelanggaran.png)
+* **Penjelasan:** Pusat investigasi forensik terhadap indikasi kecurangan, seperti penggunaan aplikasi Fake GPS / Mock Location maupun ketidakcocokan identitas hardware (*Device ID*). Menyajikan data waktu kejadian, NIP, perangkat tersangka, koordinat asli, serta fitur cetak Surat Peringatan Pertama (SP-1) resmi dalam format dokumen PDF.
+
+---
+
+### 6. Monitor Kiosk Dynamic QR Code (Auto-Refresh 30 Detik)
+![Monitor Kiosk QR](docs/screenshots/06-kiosk-monitor.png)
+* **Penjelasan:** Mode layar penuh (*fullscreen kiosk*) untuk display tablet/monitor di lobi kantor. Menghasilkan QR Code terenkripsi berbasis HMAC-SHA256 TOTP yang otomatis berganti (*auto-refresh*) setiap 30 detik untuk menggagalkan upaya foto/screenshot QR code oleh pihak yang tidak bertanggung jawab.
+
+---
+
+## 🛠️ Arsitektur & Teknologi
+
+* **Backend Engine:** Golang (Gin Framework untuk REST API & Google gRPC Server pada port `50051`).
+* **Frontend Web Admin:** Next.js 15 (React 19, TypeScript, Tailwind CSS, Lucide Icons, Leaflet).
+* **Database & Persistence:** PostgreSQL / Neon Serverless Postgres.
+* **Mobile Client:** Flutter Android (Haversine GPS calculation, Device ID hardware binding, dan Mock Location Detector).
+* **Protokol Komunikasi:** REST HTTP JSON & Protocol Buffers (`proto/presensiku.proto`).
+
+---
+
+## 📁 Struktur Monorepo
 
 ```text
 D:\presensiku-enterprise\
 ├── .github/
 │   └── workflows/
-│       └── build-flutter-apk.yml   # Otomatis build file APK Flutter di GitHub Actions
+│       └── build-flutter-apk.yml   # CI/CD otomatis build APK Flutter di GitHub Actions
 ├── android/                        # Aplikasi Mobile Pegawai (Flutter Android)
 │   ├── pubspec.yaml
 │   └── lib/
 │       ├── main.dart
 │       ├── core/                   # Konstanta API, Haversine & Anti-Mock GPS validator
-│       ├── models/                 # Data model Pegawai, Shift, Log Presensi
-│       ├── services/               # HTTP Service ke Backend Go, Geolocator, Scanner
-│       └── screens/                # Login, Dashboard Pegawai, Scanner QR, Riwayat & Izin
-├── backend/                        # REST API Server & Engine Validasi (Golang + PostgreSQL)
-│   ├── go.mod
-│   ├── cmd/
-│   │   └── api/
-│   │       └── main.go             # Entry point server Go
+│       ├── models/                 # Model Pegawai, Shift, Log Presensi
+│       └── screens/                # Login, Scanner QR, Riwayat & Pengajuan Izin
+├── backend/                        # Backend Server (Golang REST + gRPC)
+│   ├── cmd/api/main.go             # Entry point REST (:8080) & gRPC (:50051)
 │   ├── internal/
-│   │   ├── config/                 # Konfigurasi ENV & koneksi PostgreSQL
-│   │   ├── models/                 # Struct entitas database
-│   │   ├── handlers/               # Endpoint REST API (Auth, QR, Check-In, Admin CRUD)
-│   │   ├── middleware/             # JWT Auth & Role-Based Access Control
-│   │   └── services/               # Engine HMAC-SHA256 TOTP QR & Kalkulasi Haversine
-│   └── migrations/
-│       └── 001_init_schema.sql     # Skema Tabel PostgreSQL siap pakai
-└── frontend/                       # Dashboard Web Admin & Layar Monitor QR (Next.js)
-    ├── package.json
-    └── src/
-        ├── app/                    # Halaman Next.js App Router
-        ├── components/             # Komponen UI Dashboard Admin
-        ├── lib/
-        │   └── api.ts              # Koneksi HTTP ke Backend Golang
-        └── reference-demo/         # Salinan komponen asli dari portofolio (UI Reference)
+│   │   ├── config/                 # Konfigurasi ENV & Database
+│   │   ├── grpcserver/             # Implementasi Layanan Presensi gRPC
+│   │   ├── handlers/               # Controller REST (Auth, Presensi, Shift, Violations)
+│   │   ├── middleware/             # Verifikasi JWT Token & RBAC
+│   │   └── services/               # TOTP HMAC-SHA256 & Kalkulasi Jarak Haversine
+│   ├── migrations/                 # Migrasi Skema SQL PostgreSQL
+│   └── pkg/proto/                  # Generated gRPC code (Go)
+├── frontend/                       # Dashboard Web Admin & Kiosk Display (Next.js 15)
+│   ├── src/app/                    # App Router Next.js (:3001)
+│   ├── src/components/             # Komponen UI Dashboard, Shift, Geofence, Modal
+│   ├── src/lib/                    # Database client, API wrapper & gRPC bridge
+│   └── proto/                      # Proto contract definitions
+├── docs/
+│   └── screenshots/                # Tangkapan layar dokumentasi resmi
+├── docker-compose.yml              # Deployment kontainer terintegrasi
+└── proto/
+    └── presensiku.proto            # Definisi Protocol Buffers terpusat
 ```
+
+---
+
+## 🚀 Panduan Memulai Cepat
+
+### 1. Salin Berkas Lingkungan (.env)
+```bash
+cp .env.example .env
+cp backend/.env.example backend/.env
+```
+Isi variabel konfigurasi database PostgreSQL dan secret key sesuai environment Anda.
+
+### 2. Jalankan Backend (Golang)
+```bash
+cd backend
+go run cmd/api/main.go
+# Server REST aktif di http://localhost:8080
+# Server gRPC aktif di localhost:50051
+```
+
+### 3. Jalankan Web Admin (Next.js)
+```bash
+cd frontend
+npm install
+npm run dev
+# Dashboard Web Admin aktif di http://localhost:3000 (atau :3001)
+```
+
+---
+
+## 🔒 Standar Keamanan & Kepatuhan
+1. **Anti-Mock GPS / Fake Location:** Deteksi tingkat kernel Android terhadap aplikasi penyedia lokasi tiruan.
+2. **Device Hardware Binding:** 1 akun pegawai terkunci pada 1 identitas fisik smartphone.
+3. **Rolling Token TOTP:** QR code diverifikasi secara kriptografis dan kedaluwarsa setiap 30 detik.
+4. **Audit Trail Komprehensif:** Setiap tindakan modifikasi, persetujuan dispensasi, dan pembuatan sanksi dicatat pada sistem audit log.
