@@ -44,12 +44,18 @@ jobs:
             sed -i 's/MyApp/PresensiKuApp/g' test/widget_test.dart
           fi
 
-      - name: Inject Required Android Permissions (Camera & Fine Location)
+      - name: Inject Custom PresensiKu Branding, Icons, Splash Screen & Cleartext Traffic
         run: |
+          pip3 install pillow || true
+          python3 generate_icons.py || true
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if ! grep -q "android.permission.CAMERA" "$MANIFEST"; then
             sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>' "$MANIFEST"
           fi
+          if ! grep -q "android:usesCleartextTraffic" "$MANIFEST"; then
+            sed -i 's/<application/<application android:usesCleartextTraffic="true"/' "$MANIFEST"
+          fi
+          sed -i 's/android:label="presensiku_mobile"/android:label="PresensiKu Enterprise"/' "$MANIFEST" || true
 
       - name: Install Flutter Dependencies
         run: flutter pub get
