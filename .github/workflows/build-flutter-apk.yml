@@ -57,6 +57,25 @@ jobs:
           fi
           sed -i 's/android:label="presensiku_mobile"/android:label="PresensiKu Enterprise"/' "$MANIFEST" || true
 
+          # Inject Proguard Keep Rules for Plugins (SharedPreferences, Geolocator, MobileScanner)
+          cat << 'EOF' > android/app/proguard-rules.pro
+          -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+          -keep class io.flutter.plugins.sharedpreferences.** { *; }
+          -dontwarn io.flutter.plugins.sharedpreferences.**
+          -keep class kotlin.coroutines.** { *; }
+          -keep class com.baseflow.geolocator.** { *; }
+          -dontwarn com.baseflow.geolocator.**
+          -keep class dev.steenbakker.mobile_scanner.** { *; }
+          -dontwarn dev.steenbakker.mobile_scanner.**
+          -keep class dev.fluttercommunity.plus.device_info.** { *; }
+          -dontwarn dev.fluttercommunity.plus.device_info.**
+          EOF
+
+          if [ -f "android/app/build.gradle" ] && ! grep -q "proguard-rules.pro" "android/app/build.gradle"; then
+            sed -i '/signingConfig = signingConfigs.debug/a \            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"' "android/app/build.gradle" || true
+            sed -i '/signingConfig signingConfigs.debug/a \            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"' "android/app/build.gradle" || true
+          fi
+
       - name: Install Flutter Dependencies
         run: flutter pub get
 

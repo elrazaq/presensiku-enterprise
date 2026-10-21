@@ -11,11 +11,15 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   http: ^1.2.2
-  shared_preferences: ^2.3.2
+  shared_preferences: 2.2.2
+  shared_preferences_android: 2.4.2
   geolocator: ^13.0.1
   mobile_scanner: ^5.2.3
   intl: ^0.19.0
   device_info_plus: ^10.1.2
+
+dependency_overrides:
+  shared_preferences_android: 2.4.2
 
 dev_dependencies:
   flutter_test:

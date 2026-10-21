@@ -42,9 +42,9 @@ class AppColors {
 }
 
 class AppConstants {
-  // Default API Base URL (bisa disesuaikan dengan IP host jika diuji pada device fisik / emulator)
-  static const String defaultApiUrl = 'http://10.0.2.2:8080/api/v1'; // 10.0.2.2 untuk emulator Android
-  static const String fallbackLocalApiUrl = 'http://192.168.1.100:8080/api/v1';
+  // Default API Base URL (IP Wi-Fi Komputer Host untuk testing langsung di HP fisik)
+  static const String defaultApiUrl = 'http://192.168.1.5:8080/api/v1';
+  static const String fallbackEmulatorApiUrl = 'http://10.0.2.2:8080/api/v1';
 
   // Toleransi Keterlambatan Default (Menit)
   static const int defaultLateToleranceMinutes = 15;
