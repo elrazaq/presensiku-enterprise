@@ -39,6 +39,10 @@ jobs:
           if [ ! -f "android/gradlew" ]; then
             flutter create . --platforms=android --org id.presensiku.enterprise --project-name presensiku_mobile
           fi
+          # Ensure test references PresensiKuApp instead of MyApp
+          if [ -f "test/widget_test.dart" ]; then
+            sed -i 's/MyApp/PresensiKuApp/g' test/widget_test.dart
+          fi
 
       - name: Inject Required Android Permissions (Camera & Fine Location)
         run: |

@@ -57,6 +57,9 @@ func main() {
 	// --- PROTECTED ROUTES (WAJIB JWT AUTH) ---
 	authMw := middleware.AuthMiddleware(cfg.JWTSecret)
 
+	// Public System Settings (Metode Presensi & Info Instansi untuk Mobile)
+	mux.HandleFunc("GET /api/v1/settings", attH.GetSettings)
+
 	// User Profile & Change Password
 	mux.Handle("GET /api/v1/auth/me", authMw(http.HandlerFunc(authH.Me)))
 	mux.Handle("POST /api/v1/auth/change-password", authMw(http.HandlerFunc(authH.ChangePassword)))

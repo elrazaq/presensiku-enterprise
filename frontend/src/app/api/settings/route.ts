@@ -1,10 +1,30 @@
 import { NextResponse } from "next/server";
 import { db, logSystemAction } from "@/lib/db";
 
+const DEFAULT_SETTINGS: Record<string, string> = {
+  app_name: "PresensiKu Enterprise",
+  company_name: "PT PresensiKu Enterprise Indonesia",
+  company_address:
+    "Gedung Cyber Tower Lt. 18, Jl. H.R. Rasuna Said Kav. X-5 No. 13, Jakarta Selatan",
+  contact_email: "hrd@presensiku.com",
+  contact_phone: "(021) 555-8920",
+  attendance_method: "BOTH", // BOTH, QR_ONLY, SELFIE_ONLY
+  cloudinary_cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "",
+  cloudinary_api_key: process.env.CLOUDINARY_API_KEY || "",
+  cloudinary_api_secret: process.env.CLOUDINARY_API_SECRET || "",
+  cloudinary_upload_preset: process.env.CLOUDINARY_UPLOAD_PRESET || "",
+  default_tolerance_minutes: "15",
+  default_dispensation_quota: "3",
+  default_geofence_radius: "30",
+  hr_chief_name: "Siti Rahmawati, M.Psi",
+  hr_chief_nip: "19850101001",
+  hr_chief_title: "Chief Human Resources Officer",
+};
+
 export async function GET() {
   try {
     const res = await db.query("SELECT key, value FROM app_settings");
-    const settings: Record<string, string> = {};
+    const settings: Record<string, string> = { ...DEFAULT_SETTINGS };
     res.rows.forEach((row) => {
       settings[row.key] = row.value;
     });
@@ -53,7 +73,7 @@ export async function POST(request: Request) {
       module: "SISTEM",
       targetId: "APP-CFG",
       targetName: settings.app_name || "Konfigurasi Sistem",
-      details: `Memperbarui pengaturan dasar aplikasi: Nama App="${settings.app_name || "-"}", Instansi="${settings.company_name || "-"}"`,
+      details: `Memperbarui konfigurasi: Metode Presensi=${settings.attendance_method || "BOTH"}, Cloudinary=${settings.cloudinary_cloud_name ? "Terkonfigurasi" : "Belum diisi"}`,
     });
 
     return NextResponse.json({ success: true, message: "Pengaturan sistem berhasil disimpan" });

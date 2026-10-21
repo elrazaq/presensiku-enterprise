@@ -100,6 +100,17 @@ func (h *AttendanceHandler) CheckInQR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 4b. Validasi Kebijakan Metode Absensi Kantor dari Admin
+	var attendanceMethod string
+	_ = h.DB.QueryRow("SELECT value FROM app_settings WHERE key = 'attendance_method'").Scan(&attendanceMethod)
+	if attendanceMethod == "SELFIE_ONLY" {
+		writeJSON(w, http.StatusForbidden, models.ApiResponse{
+			Status: "error",
+			Error:  "Kebijakan Kantor: Admin menetapkan absensi wajib melalui Foto Wajah (Selfie)! Mode scan QR Kiosk sedang dinonaktifkan.",
+		})
+		return
+	}
+
 	// 5. LAPIS KEAMANAN 4: Validasi Dynamic QR Token HMAC-SHA256
 	if !services.VerifyDynamicQRToken(req.QRToken, deptCode, qrSecretKey) {
 		writeJSON(w, http.StatusBadRequest, models.ApiResponse{
@@ -250,7 +261,18 @@ func (h *AttendanceHandler) CheckInSelfie(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// 5. Simpan File Foto Selfie ke Storage (Local Enterprise Storage)
+	// 4b. Validasi Kebijakan Metode Absensi Kantor dari Admin
+	var attendanceMethod string
+	_ = h.DB.QueryRow("SELECT value FROM app_settings WHERE key = 'attendance_method'").Scan(&attendanceMethod)
+	if attendanceMethod == "QR_ONLY" {
+		writeJSON(w, http.StatusForbidden, models.ApiResponse{
+			Status: "error",
+			Error:  "Kebijakan Kantor: Admin menetapkan absensi wajib melalui Scan Barcode / Dynamic QR Kiosk! Mode foto selfie sedang dinonaktifkan.",
+		})
+		return
+	}
+
+	// 5. Simpan File Foto Selfie ke Storage (Cloudinary CDN atau Local Storage)
 	today := time.Now().Format("2006-01-02")
 	now := time.Now()
 
@@ -263,6 +285,20 @@ func (h *AttendanceHandler) CheckInSelfie(w http.ResponseWriter, r *http.Request
 	// Simpan gambar jika payload image base64 tersedia
 	if req.ImageBase64 != "" {
 		_ = os.WriteFile(filePath, []byte(req.ImageBase64), 0644)
+
+		// Unggah ke Cloudinary jika dikonfigurasi
+		var cloudName, apiKey, apiSecret, uploadPreset string
+		_ = h.DB.QueryRow("SELECT value FROM app_settings WHERE key = 'cloudinary_cloud_name'").Scan(&cloudName)
+		_ = h.DB.QueryRow("SELECT value FROM app_settings WHERE key = 'cloudinary_api_key'").Scan(&apiKey)
+		_ = h.DB.QueryRow("SELECT value FROM app_settings WHERE key = 'cloudinary_api_secret'").Scan(&apiSecret)
+		_ = h.DB.QueryRow("SELECT value FROM app_settings WHERE key = 'cloudinary_upload_preset'").Scan(&uploadPreset)
+
+		if cloudName != "" {
+			cURL, err := services.UploadSelfieToCloudinary(req.ImageBase64, cloudName, apiKey, apiSecret, uploadPreset)
+			if err == nil && cURL != "" {
+				selfieURL = cURL
+			}
+		}
 	}
 
 	// 6. Simpan Log Presensi
@@ -474,6 +510,29 @@ func (h *AttendanceHandler) ListAllAttendance(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, models.ApiResponse{
 		Status: "success",
 		Data:   logs,
+	})
+}
+
+// GetSettings mengembalikan pengaturan sistem publik (metode presensi & profil instansi)
+func (h *AttendanceHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.DB.Query("SELECT key, value FROM app_settings")
+	settings := map[string]string{
+		"attendance_method": "BOTH",
+		"app_name":          "PresensiKu Enterprise",
+		"company_name":      "PT PresensiKu Enterprise Indonesia",
+	}
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var k, v string
+			if err := rows.Scan(&k, &v); err == nil {
+				settings[k] = v
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, models.ApiResponse{
+		Status: "success",
+		Data:   settings,
 	})
 }
 

@@ -26,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _checkInTimeStr;
   bool _isCheckingOut = false;
   Shift? _currentShift;
+  String _attendanceMethod = 'BOTH'; // BOTH, QR_ONLY, SELFIE_ONLY
 
   @override
   void initState() {
@@ -34,11 +35,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadShiftAndTodayStatus() async {
+    // 1. Ambil Kebijakan Metode Presensi dari Admin (QR / Selfie / Both)
+    final settings = await ApiService.getSystemSettings();
+    if (mounted && settings.containsKey('attendance_method')) {
+      setState(() => _attendanceMethod = settings['attendance_method'] ?? 'BOTH');
+    }
+
+    // 2. Ambil Master Shift
     final shifts = await ApiService.getShifts();
     if (shifts.isNotEmpty && mounted) {
       setState(() => _currentShift = shifts.first);
     }
 
+    // 3. Ambil Status Hari Ini
     final history = await ApiService.getMyAttendanceHistory();
     if (history.isNotEmpty && mounted) {
       final today = history.first;
@@ -52,6 +61,43 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     }
+  }
+
+  void _handlePrimaryAction() {
+    if (_attendanceMethod == 'SELFIE_ONLY') {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const SelfieAttendanceScreen()))
+          .then((_) => _loadShiftAndTodayStatus());
+    } else {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const QrScannerScreen()))
+          .then((_) => _loadShiftAndTodayStatus());
+    }
+  }
+
+  void _showRestrictedMethodDialog(String attemptedMethod, String requiredMethod) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        icon: const Icon(Icons.policy_outlined, size: 44, color: AppColors.wine),
+        title: const Text('Kebijakan Absensi Kantor', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.deepNavy)),
+        content: Text(
+          'Admin HRD menetapkan metode presensi saat ini WAJIB menggunakan $requiredMethod.\n\nMode $attemptedMethod sedang dinonaktifkan.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 13),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _handlePrimaryAction();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.deepNavy, foregroundColor: Colors.white),
+            child: Text('Buka $requiredMethod'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleCheckOut() async {
@@ -239,7 +285,7 @@ class _HomeScreenState extends State<HomeScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                 child: Container(
-                  height: 195,
+                  height: 205,
                   padding: const EdgeInsets.all(22),
                   decoration: BoxDecoration(
                     gradient: AppColors.cardGradient,
@@ -262,9 +308,29 @@ class _HomeScreenState extends State<HomeScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'STATUS HARI INI',
-                                style: TextStyle(color: AppColors.cream, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                              Row(
+                                children: [
+                                  const Text(
+                                    'STATUS HARI INI',
+                                    style: TextStyle(color: AppColors.cream, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: _attendanceMethod == 'QR_ONLY'
+                                          ? AppColors.oceanTeal
+                                          : (_attendanceMethod == 'SELFIE_ONLY' ? AppColors.wine : Colors.white24),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      _attendanceMethod == 'QR_ONLY'
+                                          ? 'Mode: QR Kiosk'
+                                          : (_attendanceMethod == 'SELFIE_ONLY' ? 'Mode: Selfie' : 'Mode: Bebas'),
+                                      style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                ],
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -329,6 +395,25 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: _isCheckingOut
                                   ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                                   : const Text('Absen Pulang', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                            )
+                          else
+                            ElevatedButton.icon(
+                              onPressed: _handlePrimaryAction,
+                              icon: Icon(
+                                _attendanceMethod == 'SELFIE_ONLY' ? Icons.camera_alt : Icons.qr_code_scanner,
+                                size: 13,
+                              ),
+                              label: Text(
+                                _attendanceMethod == 'SELFIE_ONLY' ? 'Absen Selfie' : 'Absen QR',
+                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _attendanceMethod == 'SELFIE_ONLY' ? AppColors.wine : AppColors.oceanTeal,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                elevation: 0,
+                              ),
                             ),
                         ],
                       ),
@@ -351,18 +436,26 @@ class _HomeScreenState extends State<HomeScreen> {
                   children: [
                     _buildActionTile(
                       icon: Icons.qr_code_scanner_rounded,
-                      label: 'Absen QR',
-                      iconColor: AppColors.oceanTeal,
+                      label: _attendanceMethod == 'SELFIE_ONLY' ? 'QR (Nonaktif)' : 'Absen QR',
+                      iconColor: _attendanceMethod == 'SELFIE_ONLY' ? Colors.grey : AppColors.oceanTeal,
                       onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const QrScannerScreen())).then((_) => _loadShiftAndTodayStatus());
+                        if (_attendanceMethod == 'SELFIE_ONLY') {
+                          _showRestrictedMethodDialog('Scan Barcode / QR Kiosk', 'Foto Wajah (Selfie)');
+                        } else {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const QrScannerScreen())).then((_) => _loadShiftAndTodayStatus());
+                        }
                       },
                     ),
                     _buildActionTile(
                       icon: Icons.camera_front_rounded,
-                      label: 'Selfie',
-                      iconColor: AppColors.wine,
+                      label: _attendanceMethod == 'QR_ONLY' ? 'Selfie (Nonaktif)' : 'Selfie',
+                      iconColor: _attendanceMethod == 'QR_ONLY' ? Colors.grey : AppColors.wine,
                       onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const SelfieAttendanceScreen())).then((_) => _loadShiftAndTodayStatus());
+                        if (_attendanceMethod == 'QR_ONLY') {
+                          _showRestrictedMethodDialog('Foto Wajah (Selfie)', 'Scan Barcode / QR Kiosk');
+                        } else {
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => const SelfieAttendanceScreen())).then((_) => _loadShiftAndTodayStatus());
+                        }
                       },
                     ),
                     _buildActionTile(
@@ -484,24 +577,33 @@ class _HomeScreenState extends State<HomeScreen> {
         margin: const EdgeInsets.only(top: 24),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFBBF24), Color(0xFFF59E0B)], // Golden yellow scanner button matching reference
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          gradient: _attendanceMethod == 'SELFIE_ONLY'
+              ? const LinearGradient(
+                  colors: [AppColors.wine, AppColors.deepNavy],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : const LinearGradient(
+                  colors: [Color(0xFFFBBF24), Color(0xFFF59E0B)], // Golden yellow scanner button matching reference
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFF59E0B).withOpacity(0.4),
+              color: (_attendanceMethod == 'SELFIE_ONLY' ? AppColors.wine : const Color(0xFFF59E0B)).withOpacity(0.4),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
           ],
         ),
         child: IconButton(
-          icon: const Icon(Icons.qr_code_scanner_rounded, color: Colors.white, size: 28),
-          onPressed: () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const QrScannerScreen())).then((_) => _loadShiftAndTodayStatus());
-          },
+          icon: Icon(
+            _attendanceMethod == 'SELFIE_ONLY' ? Icons.camera_alt_rounded : Icons.qr_code_scanner_rounded,
+            color: Colors.white,
+            size: 28,
+          ),
+          tooltip: _attendanceMethod == 'SELFIE_ONLY' ? 'Ambil Foto Selfie' : 'Scan Dynamic QR',
+          onPressed: _handlePrimaryAction,
         ),
       ),
       bottomNavigationBar: Container(

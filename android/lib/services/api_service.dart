@@ -350,4 +350,25 @@ class ApiService {
       );
     } catch (_) {}
   }
+
+  /// 8. Mengambil Pengaturan Sistem (Kebijakan Metode Presensi: BOTH, QR_ONLY, SELFIE_ONLY)
+  static Future<Map<String, String>> getSystemSettings() async {
+    try {
+      final baseUrl = await getBaseUrl();
+      final res = await http.get(Uri.parse('$baseUrl/settings'));
+      if (res.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(res.body);
+        if (body['data'] is Map) {
+          final Map<String, dynamic> rawMap = body['data'];
+          final Map<String, String> result = {};
+          rawMap.forEach((k, v) => result[k] = v.toString());
+          return result;
+        }
+      }
+    } catch (_) {}
+    return {
+      'attendance_method': 'BOTH',
+      'app_name': 'PresensiKu Enterprise',
+    };
+  }
 }
