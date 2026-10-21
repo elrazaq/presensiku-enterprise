@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: presensiku-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: presensiku_user
+      POSTGRES_PASSWORD: presensiku_secure_pass_2026
+      POSTGRES_DB: presensiku_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - presensiku_pgdata:/var/lib/postgresql/data
+      - ./backend/migrations/001_init_schema.sql:/docker-entrypoint-initdb.d/001_init_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U presensiku_user -d presensiku_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  presensiku_pgdata:
+    driver: local

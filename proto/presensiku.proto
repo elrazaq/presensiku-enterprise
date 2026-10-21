@@ -1,0 +1,157 @@
+syntax = "proto3";
+
+package presensiku;
+
+option go_package = "github.com/elrazaq/presensiku-enterprise/backend/pkg/proto/presensiku;presensikupb";
+
+// 1. Health Service
+service HealthService {
+  rpc Check(HealthRequest) returns (HealthResponse);
+}
+
+message HealthRequest {
+  string client_version = 1;
+}
+
+message HealthResponse {
+  string status = 1;
+  string message = 2;
+  string server_time = 3;
+  string engine = 4;
+}
+
+// 2. Auth Service
+service AuthService {
+  rpc LoginWeb(LoginWebRequest) returns (LoginWebResponse);
+  rpc ValidateSession(SessionRequest) returns (SessionResponse);
+}
+
+message LoginWebRequest {
+  string nip_or_email = 1;
+  string password = 2;
+  string client_ip = 3;
+}
+
+message LoginWebResponse {
+  bool success = 1;
+  string message = 2;
+  string token = 3;
+  EmployeeProfile user = 4;
+}
+
+message SessionRequest {
+  string token = 1;
+}
+
+message SessionResponse {
+  bool valid = 1;
+  EmployeeProfile user = 2;
+}
+
+// 3. Attendance Service
+service AttendanceService {
+  rpc GetLiveQR(LiveQRRequest) returns (LiveQRResponse);
+  rpc CheckInQR(CheckInQRRequest) returns (AttendanceResponse);
+  rpc CheckInSelfie(CheckInSelfieRequest) returns (AttendanceResponse);
+  rpc GetStats(StatsRequest) returns (StatsResponse);
+}
+
+message LiveQRRequest {
+  string department_code = 1;
+}
+
+message LiveQRResponse {
+  string department_code = 1;
+  string department_name = 2;
+  string qr_token = 3;
+  int32 remaining_seconds = 4;
+  int64 timestamp = 5;
+}
+
+message CheckInQRRequest {
+  string token = 1;
+  string qr_token = 2;
+  double latitude = 3;
+  double longitude = 4;
+  string device_id = 5;
+  bool is_mocked = 6;
+}
+
+message CheckInSelfieRequest {
+  string token = 1;
+  string selfie_url = 2;
+  double latitude = 3;
+  double longitude = 4;
+  string device_id = 5;
+  bool is_mocked = 6;
+  string department_code = 7;
+}
+
+message AttendanceResponse {
+  bool success = 1;
+  string message = 2;
+  string attendance_id = 3;
+  string timestamp = 4;
+  double distance_meters = 5;
+  string status = 6;
+}
+
+message StatsRequest {
+  string filter_department = 1;
+  int32 days_range = 2;
+}
+
+message StatsResponse {
+  int32 total_employees = 1;
+  int32 total_present_today = 2;
+  int32 total_violations = 3;
+  int32 bound_devices = 4;
+}
+
+// 4. Security Violation Service
+service SecurityService {
+  rpc ReportViolation(ViolationReportRequest) returns (ViolationReportResponse);
+  rpc ListViolations(Empty) returns (ViolationListResponse);
+}
+
+message Empty {}
+
+message ViolationReportRequest {
+  string employee_id = 1;
+  string violation_type = 2;
+  string details = 3;
+  double attempted_lat = 4;
+  double attempted_lng = 5;
+  string device_info = 6;
+}
+
+message ViolationReportResponse {
+  bool recorded = 1;
+  string message = 2;
+  string incident_id = 3;
+}
+
+message ViolationRecord {
+  string id = 1;
+  string employee_name = 2;
+  string nip = 3;
+  string violation_type = 4;
+  string details = 5;
+  double attempted_lat = 6;
+  double attempted_lng = 7;
+  string device_info = 8;
+  string created_at = 9;
+}
+
+message ViolationListResponse {
+  repeated ViolationRecord records = 1;
+}
+
+message EmployeeProfile {
+  string id = 1;
+  string nip = 2;
+  string name = 3;
+  string email = 4;
+  string role = 5;
+  string department = 6;
+}

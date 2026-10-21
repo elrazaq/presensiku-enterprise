@@ -1,0 +1,53 @@
+# ==========================================
+# PresensiKu Enterprise - .gitignore
+# ==========================================
+
+# 1. Environment & Credentials (STRICT PRIVACY)
+.env
+*.env
+.env.*
+!.env.example
+.neon
+
+# 2. Planning & Scratch Scripts (Excluded per User Instructions)
+IMPLEMENTATION_PLAN.md
+*.plan.md
+scratch/
+check_db.js
+
+# 3. Binaries & Compiled Executables
+*.exe
+*.dll
+*.so
+*.dylib
+protoc-bin/
+backend/presensiku-api.exe
+backend/uploads/
+
+
+# 4. Dependency Directories
+node_modules/
+frontend/node_modules/
+
+# 5. Next.js & Frontend Build Outputs
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# 6. Logs & Diagnostics
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 7. OS & IDE Metadata
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
