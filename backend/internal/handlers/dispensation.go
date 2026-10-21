@@ -26,28 +26,34 @@ func NewDispensationHandler(db *sql.DB, cfg *config.Config) *DispensationHandler
 func (h *DispensationHandler) SubmitDispensation(w http.ResponseWriter, r *http.Request) {
 	claims, ok := r.Context().Value(middleware.UserContextKey).(*middleware.JWTClaims)
 	if !ok || claims == nil {
-		writeJSON(w, http.StatusUnauthorized, models.ApiResponse{Status: "error", Error: "Sesi tidak valid"})
+		writeJSON(w, http.StatusUnauthorized, models.ApiResponse{Status: "error", Message: "Sesi tidak valid", Error: "Sesi tidak valid"})
 		return
 	}
 
 	var req struct {
-		RequestDate string `json:"request_date"`
-		Category    string `json:"category"`
-		Reason      string `json:"reason"`
+		RequestDate      string `json:"request_date"`
+		RequestedCheckIn string `json:"requested_check_in"`
+		Category         string `json:"category"`
+		Reason           string `json:"reason"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ApiResponse{Status: "error", Error: "Format JSON tidak valid"})
+		writeJSON(w, http.StatusBadRequest, models.ApiResponse{Status: "error", Message: "Format JSON tidak valid", Error: "Format JSON tidak valid"})
 		return
 	}
 
 	req.RequestDate = strings.TrimSpace(req.RequestDate)
 	req.Reason = strings.TrimSpace(req.Reason)
 	req.Category = strings.TrimSpace(req.Category)
+	req.RequestedCheckIn = strings.TrimSpace(req.RequestedCheckIn)
 
 	if req.RequestDate == "" || req.Reason == "" {
-		writeJSON(w, http.StatusBadRequest, models.ApiResponse{Status: "error", Error: "Tanggal dan Alasan pengajuan wajib diisi!"})
+		writeJSON(w, http.StatusBadRequest, models.ApiResponse{Status: "error", Message: "Tanggal dan Alasan pengajuan wajib diisi!", Error: "Tanggal dan Alasan pengajuan wajib diisi!"})
 		return
+	}
+
+	if req.RequestedCheckIn == "" {
+		req.RequestedCheckIn = "08:00:00"
 	}
 
 	// 1. Cek Kuota Pengajuan ("Surat Sakti" maksimal 3 kali)
@@ -58,7 +64,7 @@ func (h *DispensationHandler) SubmitDispensation(w http.ResponseWriter, r *http.
 	`, claims.EmployeeID).Scan(&usedQuota)
 
 	if err != nil && err != sql.ErrNoRows {
-		writeJSON(w, http.StatusInternalServerError, models.ApiResponse{Status: "error", Error: "Gagal memeriksa kuota pengajuan"})
+		writeJSON(w, http.StatusInternalServerError, models.ApiResponse{Status: "error", Message: "Gagal memeriksa kuota pengajuan", Error: "Gagal memeriksa kuota pengajuan"})
 		return
 	}
 
@@ -79,19 +85,30 @@ func (h *DispensationHandler) SubmitDispensation(w http.ResponseWriter, r *http.
 		fullReason = fmt.Sprintf("[%s] %s", req.Category, req.Reason)
 	}
 
-	// 2. Simpan Pengajuan ke database
+	// 2. Simpan Pengajuan ke database (Kolom requested_check_in wajib NOT NULL)
 	var dispID string
 	err = h.DB.QueryRow(`
 		INSERT INTO attendance_dispensations (
-			id, employee_id, target_date, reason, notes, approval_status, quota_used_number, created_at
-		) VALUES (gen_random_uuid(), $1, $2, $3, $4, 'PENDING', $5, $6)
+			id, employee_id, target_date, requested_check_in, reason, notes, approval_status, quota_used_number, created_at
+		) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'PENDING', $6, $7)
 		RETURNING id;
-	`, claims.EmployeeID, req.RequestDate, fullReason, req.Category, quotaNumber, now).Scan(&dispID)
+	`, claims.EmployeeID, req.RequestDate, req.RequestedCheckIn, fullReason, req.Category, quotaNumber, now).Scan(&dispID)
 
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ApiResponse{Status: "error", Error: fmt.Sprintf("Gagal menyimpan pengajuan: %v", err)})
+		writeJSON(w, http.StatusInternalServerError, models.ApiResponse{
+			Status:  "error",
+			Message: fmt.Sprintf("Gagal menyimpan pengajuan: %v", err),
+			Error:   fmt.Sprintf("Gagal menyimpan pengajuan: %v", err),
+		})
 		return
 	}
+
+	// Sinkronisasi pengurangan sisa kuota pada tabel pegawai
+	_, _ = h.DB.Exec(`
+		UPDATE employees 
+		SET dispensation_quota_remaining = GREATEST(0, dispensation_quota_remaining - 1) 
+		WHERE id = $1;
+	`, claims.EmployeeID)
 
 	writeJSON(w, http.StatusOK, models.ApiResponse{
 		Status:  "success",

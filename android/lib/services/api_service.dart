@@ -124,21 +124,37 @@ class ApiService {
         'latitude': latitude,
         'longitude': longitude,
         'device_id': deviceId,
+        'is_mocked': false,
       };
 
-      if (qrPayload != null) payload['qr_payload'] = qrPayload;
-      if (selfieBase64 != null) payload['selfie_base64'] = selfieBase64;
+      if (qrPayload != null) {
+        payload['qr_payload'] = qrPayload;
+        payload['qr_token'] = qrPayload;
+      }
+      if (selfieBase64 != null) {
+        payload['selfie_base64'] = selfieBase64;
+        payload['image_base64'] = selfieBase64;
+      }
 
       final res = await http.post(
         Uri.parse('$baseUrl/attendance/check-in'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
+          'X-Device-ID': deviceId,
         },
         body: jsonEncode(payload),
       );
 
-      final Map<String, dynamic> body = jsonDecode(res.body);
+      Map<String, dynamic> body;
+      try {
+        body = jsonDecode(res.body);
+      } catch (_) {
+        return ApiResponse(
+          success: false,
+          message: 'Server respon (${res.statusCode}): ${res.body.trim()}',
+        );
+      }
 
       if (res.statusCode == 200 && body['status'] == 'success') {
         final record = AttendanceRecord.fromJson(body['data']);
@@ -148,9 +164,14 @@ class ApiService {
           data: record,
         );
       } else {
+        final errText = (body['message'] != null && body['message'].toString().trim().isNotEmpty)
+            ? body['message'].toString()
+            : (body['error'] != null && body['error'].toString().trim().isNotEmpty
+                ? body['error'].toString()
+                : 'Presensi masuk ditolak (${res.statusCode}).');
         return ApiResponse(
           success: false,
-          message: body['message'] ?? 'Presensi masuk ditolak.',
+          message: errText,
           errorCode: body['code'],
         );
       }
@@ -181,6 +202,7 @@ class ApiService {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
+          'X-Device-ID': deviceId,
         },
         body: jsonEncode({
           'latitude': latitude,
@@ -189,7 +211,15 @@ class ApiService {
         }),
       );
 
-      final Map<String, dynamic> body = jsonDecode(res.body);
+      Map<String, dynamic> body;
+      try {
+        body = jsonDecode(res.body);
+      } catch (_) {
+        return ApiResponse(
+          success: false,
+          message: 'Server respon (${res.statusCode}): ${res.body.trim()}',
+        );
+      }
 
       if (res.statusCode == 200 && body['status'] == 'success') {
         final record = AttendanceRecord.fromJson(body['data']);
@@ -199,9 +229,14 @@ class ApiService {
           data: record,
         );
       } else {
+        final errText = (body['message'] != null && body['message'].toString().trim().isNotEmpty)
+            ? body['message'].toString()
+            : (body['error'] != null && body['error'].toString().trim().isNotEmpty
+                ? body['error'].toString()
+                : 'Presensi pulang gagal (${res.statusCode}).');
         return ApiResponse(
           success: false,
-          message: body['message'] ?? 'Presensi pulang gagal.',
+          message: errText,
           errorCode: body['code'],
         );
       }
@@ -345,24 +380,38 @@ class ApiService {
         },
         body: jsonEncode({
           'request_date': requestDate,
+          'requested_check_in': '08:00:00',
           'category': category,
           'reason': reason,
         }),
       );
 
-      final Map<String, dynamic> body = jsonDecode(res.body);
+      Map<String, dynamic> body;
+      try {
+        body = jsonDecode(res.body);
+      } catch (_) {
+        return ApiResponse(
+          success: false,
+          message: 'Server respon (${res.statusCode}): ${res.body.trim()}',
+        );
+      }
 
       if (res.statusCode == 200 && body['status'] == 'success') {
         final item = DispensationRequest.fromJson(body['data']);
         return ApiResponse(
           success: true,
-          message: 'Pengajuan dispensasi berhasil diajukan ke HRD.',
+          message: body['message'] ?? 'Pengajuan dispensasi berhasil diajukan ke HRD.',
           data: item,
         );
       } else {
+        final errText = (body['message'] != null && body['message'].toString().trim().isNotEmpty)
+            ? body['message'].toString()
+            : (body['error'] != null && body['error'].toString().trim().isNotEmpty
+                ? body['error'].toString()
+                : 'Pengajuan dispensasi gagal (${res.statusCode}).');
         return ApiResponse(
           success: false,
-          message: body['message'] ?? 'Pengajuan dispensasi gagal.',
+          message: errText,
           errorCode: body['code'],
         );
       }

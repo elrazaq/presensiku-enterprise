@@ -66,6 +66,7 @@ func main() {
 	mux.Handle("POST /api/v1/auth/change-password", authMw(http.HandlerFunc(authH.ChangePassword)))
 
 	// Attendance Routes (2 Metode: QR Dinamis & Selfie Wajah)
+	mux.Handle("POST /api/v1/attendance/check-in", authMw(http.HandlerFunc(attH.CheckInUnified)))
 	mux.Handle("POST /api/v1/attendance/check-in/qr", authMw(http.HandlerFunc(attH.CheckInQR)))
 	mux.Handle("POST /api/v1/attendance/check-in/selfie", authMw(http.HandlerFunc(attH.CheckInSelfie)))
 	mux.Handle("POST /api/v1/attendance/check-out", authMw(http.HandlerFunc(attH.CheckOut)))

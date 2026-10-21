@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -25,21 +27,64 @@ func NewAttendanceHandler(db *sql.DB, cfg *config.Config) *AttendanceHandler {
 	return &AttendanceHandler{DB: db, Cfg: cfg}
 }
 
+// CheckInUnified handles Attendance Check-In dynamically via QR or Selfie
+func (h *AttendanceHandler) CheckInUnified(w http.ResponseWriter, r *http.Request) {
+	bodyBytes, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, models.ApiResponse{Status: "error", Message: "Gagal membaca body request", Error: "Gagal membaca body request"})
+		return
+	}
+
+	var probe struct {
+		Method       string `json:"method"`
+		QRToken      string `json:"qr_token"`
+		QRPayload    string `json:"qr_payload"`
+		ImageBase64  string `json:"image_base64"`
+		SelfieBase64 string `json:"selfie_base64"`
+	}
+	_ = json.Unmarshal(bodyBytes, &probe)
+
+	// Recreate Body for target handler
+	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	method := strings.ToUpper(strings.TrimSpace(probe.Method))
+	if method == "SELFIE" || method == "SELFIE_FACE" || ((probe.SelfieBase64 != "" || probe.ImageBase64 != "") && probe.QRToken == "" && probe.QRPayload == "") {
+		h.CheckInSelfie(w, r)
+		return
+	}
+
+	h.CheckInQR(w, r)
+}
+
 // CheckInQR handles Attendance via Dynamic QR Matrix + Geofence + Anti-Mock GPS
 func (h *AttendanceHandler) CheckInQR(w http.ResponseWriter, r *http.Request) {
 	claims, ok := r.Context().Value(middleware.UserContextKey).(*middleware.JWTClaims)
 	if !ok || claims == nil {
-		writeJSON(w, http.StatusUnauthorized, models.ApiResponse{Status: "error", Error: "Sesi tidak valid"})
+		writeJSON(w, http.StatusUnauthorized, models.ApiResponse{Status: "error", Message: "Sesi tidak valid", Error: "Sesi tidak valid"})
 		return
 	}
 
-	var req models.CheckInQRRequest
+	var req struct {
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+		IsMocked  bool    `json:"is_mocked"`
+		QRToken   string  `json:"qr_token"`
+		QRPayload string  `json:"qr_payload"`
+		DeviceID  string  `json:"device_id"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ApiResponse{Status: "error", Error: "Format JSON tidak valid"})
+		writeJSON(w, http.StatusBadRequest, models.ApiResponse{Status: "error", Message: "Format JSON tidak valid", Error: "Format JSON tidak valid"})
 		return
+	}
+
+	if req.QRToken == "" && req.QRPayload != "" {
+		req.QRToken = req.QRPayload
 	}
 
 	deviceID := r.Header.Get("X-Device-ID")
+	if deviceID == "" {
+		deviceID = req.DeviceID
+	}
 
 	// 1. LAPIS KEAMANAN 1: Deteksi Fake GPS / Mock Location
 	if req.IsMocked {
@@ -178,12 +223,18 @@ func (h *AttendanceHandler) CheckInQR(w http.ResponseWriter, r *http.Request) {
 		Status:  "success",
 		Message: fmt.Sprintf("Presensi Masuk Berhasil! Status: %s (Jarak: %.1f meter)", statusKehadiran, distanceMeters),
 		Data: map[string]interface{}{
-			"log_id":          logID,
-			"date":            today,
-			"check_in_time":   now.Format("15:04:05"),
-			"status":          statusKehadiran,
-			"distance_meters": distanceMeters,
-			"method":          "QR_CODE",
+			"id":                logID,
+			"log_id":            logID,
+			"employee_id":       claims.EmployeeID,
+			"date":              today,
+			"check_in_time":     now.Format(time.RFC3339),
+			"check_in_time_str": now.Format("15:04:05"),
+			"status":            statusKehadiran,
+			"check_in_distance": distanceMeters,
+			"distance_meters":   distanceMeters,
+			"check_in_method":   "QR_CODE",
+			"attendance_method": "QR_CODE",
+			"notes":             "Presensi QR Dinamis Sah",
 		},
 	})
 }
@@ -192,17 +243,31 @@ func (h *AttendanceHandler) CheckInQR(w http.ResponseWriter, r *http.Request) {
 func (h *AttendanceHandler) CheckInSelfie(w http.ResponseWriter, r *http.Request) {
 	claims, ok := r.Context().Value(middleware.UserContextKey).(*middleware.JWTClaims)
 	if !ok || claims == nil {
-		writeJSON(w, http.StatusUnauthorized, models.ApiResponse{Status: "error", Error: "Sesi tidak valid"})
+		writeJSON(w, http.StatusUnauthorized, models.ApiResponse{Status: "error", Message: "Sesi tidak valid", Error: "Sesi tidak valid"})
 		return
 	}
 
-	var req models.CheckInSelfieRequest
+	var req struct {
+		Latitude     float64 `json:"latitude"`
+		Longitude    float64 `json:"longitude"`
+		IsMocked     bool    `json:"is_mocked"`
+		ImageBase64  string  `json:"image_base64"`
+		SelfieBase64 string  `json:"selfie_base64"`
+		DeviceID     string  `json:"device_id"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ApiResponse{Status: "error", Error: "Format JSON tidak valid"})
+		writeJSON(w, http.StatusBadRequest, models.ApiResponse{Status: "error", Message: "Format JSON tidak valid", Error: "Format JSON tidak valid"})
 		return
+	}
+
+	if req.ImageBase64 == "" && req.SelfieBase64 != "" {
+		req.ImageBase64 = req.SelfieBase64
 	}
 
 	deviceID := r.Header.Get("X-Device-ID")
+	if deviceID == "" {
+		deviceID = req.DeviceID
+	}
 
 	// 1. LAPIS KEAMANAN 1: Deteksi Fake GPS
 	if req.IsMocked {
@@ -338,13 +403,20 @@ func (h *AttendanceHandler) CheckInSelfie(w http.ResponseWriter, r *http.Request
 		Status:  "success",
 		Message: fmt.Sprintf("Presensi Foto Wajah Berhasil! Status: %s (Jarak: %.1f meter)", statusKehadiran, distanceMeters),
 		Data: map[string]interface{}{
-			"log_id":          logID,
-			"date":            today,
-			"check_in_time":   now.Format("15:04:05"),
-			"status":          statusKehadiran,
-			"distance_meters": distanceMeters,
-			"selfie_url":      selfieURL,
-			"method":          "SELFIE_FACE",
+			"id":                logID,
+			"log_id":            logID,
+			"employee_id":       claims.EmployeeID,
+			"date":              today,
+			"check_in_time":     now.Format(time.RFC3339),
+			"check_in_time_str": now.Format("15:04:05"),
+			"status":            statusKehadiran,
+			"check_in_distance": distanceMeters,
+			"distance_meters":   distanceMeters,
+			"selfie_url":        selfieURL,
+			"check_in_method":   "SELFIE_FACE",
+			"attendance_method": "SELFIE_FACE",
+			"method":            "SELFIE_FACE",
+			"notes":             "Presensi Foto Wajah Sah",
 		},
 	})
 }

@@ -113,8 +113,18 @@ class _DispensationScreenState extends State<DispensationScreen> {
   }
 
   void _showWarning(String msg) {
+    final text = msg.trim().isEmpty ? 'Terjadi kendala saat memproses permohonan dispensasi.' : msg;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: AppColors.wine, behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text(
+          text,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+        ),
+        backgroundColor: AppColors.wine,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 4),
+      ),
     );
   }
 
