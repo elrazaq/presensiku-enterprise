@@ -19,7 +19,6 @@ class _SelfieAttendanceScreenState extends State<SelfieAttendanceScreen> {
   Position? _currentPosition;
   String _gpsStatus = 'Mencari koordinat presisi...';
   bool _isInGeofence = false;
-  double _distanceMeters = 0.0;
 
   // Koordinat acuan kantor (Ruang Server & IT)
   final double officeLat = -6.2088;
@@ -49,7 +48,6 @@ class _SelfieAttendanceScreenState extends State<SelfieAttendanceScreen> {
 
       setState(() {
         _currentPosition = pos;
-        _distanceMeters = dist;
         _isInGeofence = dist <= allowedRadiusMeters;
         _isLoadingGps = false;
         _gpsStatus = _isInGeofence
@@ -114,8 +112,8 @@ class _SelfieAttendanceScreenState extends State<SelfieAttendanceScreen> {
 
     try {
       // Dummy selfie string avatar (base64 image placeholder)
-      final dummyBase64Selfie = 'data:image/jpeg;base64,' +
-          base64Encode(utf8.encode('PRESENSI_SELFIE_TIMESTAMP_${DateTime.now().toIso8601String()}'));
+      final dummyBase64Selfie =
+          'data:image/jpeg;base64,${base64Encode(utf8.encode('PRESENSI_SELFIE_TIMESTAMP_${DateTime.now().toIso8601String()}'))}';
 
       final res = await ApiService.checkIn(
         method: 'SELFIE',
