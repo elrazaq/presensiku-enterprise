@@ -9,13 +9,23 @@
 -keep class kotlin.coroutines.** { *; }
 -keep class kotlinx.coroutines.** { *; }
 
-# Geolocator
--keep class com.baseflow.geolocator.** { *; }
--dontwarn com.baseflow.geolocator.**
+# CameraX (Required for Camera & Scanner Preview in Release APK)
+-keep class androidx.camera.** { *; }
+-dontwarn androidx.camera.**
+
+# ML Kit Barcode dependencies
+-keep class com.google.android.gms.internal.mlkit_vision_barcode.** { *; }
+-keep class com.google.mlkit.** { *; }
+-dontwarn com.google.mlkit.**
+-dontwarn com.google.android.gms.internal.mlkit_vision_barcode.**
 
 # Mobile Scanner
 -keep class dev.steenbakker.mobile_scanner.** { *; }
 -dontwarn dev.steenbakker.mobile_scanner.**
+
+# Geolocator
+-keep class com.baseflow.geolocator.** { *; }
+-dontwarn com.baseflow.geolocator.**
 
 # Device Info
 -keep class dev.fluttercommunity.plus.device_info.** { *; }

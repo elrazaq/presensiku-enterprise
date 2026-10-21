@@ -27,14 +27,22 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isCheckingOut = false;
   Shift? _currentShift;
   String _attendanceMethod = 'BOTH'; // BOTH, QR_ONLY, SELFIE_ONLY
+  late Employee _currentEmployee;
 
   @override
   void initState() {
     super.initState();
+    _currentEmployee = widget.employee;
     _loadShiftAndTodayStatus();
   }
 
   Future<void> _loadShiftAndTodayStatus() async {
+    // 0. Sinkronisasi Data Profil & Departemen Terbaru
+    final updatedEmployee = await ApiService.getMe();
+    if (updatedEmployee != null && mounted) {
+      setState(() => _currentEmployee = updatedEmployee);
+    }
+
     // 1. Ambil Kebijakan Metode Presensi dari Admin (QR / Selfie / Both)
     final settings = await ApiService.getSystemSettings();
     if (mounted && settings.containsKey('attendance_method')) {
@@ -65,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _handlePrimaryAction() {
     if (_attendanceMethod == 'SELFIE_ONLY') {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => const SelfieAttendanceScreen()))
+      Navigator.push(context, MaterialPageRoute(builder: (_) => SelfieAttendanceScreen(employee: _currentEmployee)))
           .then((_) => _loadShiftAndTodayStatus());
     } else {
       Navigator.push(context, MaterialPageRoute(builder: (_) => const QrScannerScreen()))
@@ -239,7 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          widget.employee.fullName,
+                          _currentEmployee.fullName,
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -355,7 +363,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       // Middle Row: NIP Format
                       Text(
-                        'NIP • ${widget.employee.nip}',
+                        'NIP • ${_currentEmployee.nip}',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 14,
@@ -454,7 +462,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         if (_attendanceMethod == 'QR_ONLY') {
                           _showRestrictedMethodDialog('Foto Wajah (Selfie)', 'Scan Barcode / QR Kiosk');
                         } else {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const SelfieAttendanceScreen())).then((_) => _loadShiftAndTodayStatus());
+                          Navigator.push(context, MaterialPageRoute(builder: (_) => SelfieAttendanceScreen(employee: _currentEmployee))).then((_) => _loadShiftAndTodayStatus());
                         }
                       },
                     ),
@@ -491,7 +499,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       label: 'Perangkat',
                       iconColor: AppColors.deepNavy,
                       onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(employee: widget.employee)));
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(employee: _currentEmployee)));
                       },
                     ),
                     _buildActionTile(
@@ -635,7 +643,7 @@ class _HomeScreenState extends State<HomeScreen> {
             IconButton(
               icon: Icon(Icons.person_outline_rounded, color: _currentIndex == 3 ? Colors.white : Colors.white54),
               onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(employee: widget.employee)));
+                Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen(employee: _currentEmployee)));
               },
             ),
           ],

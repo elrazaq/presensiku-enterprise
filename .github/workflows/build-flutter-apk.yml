@@ -50,23 +50,29 @@ jobs:
           python3 generate_icons.py || true
           MANIFEST="android/app/src/main/AndroidManifest.xml"
           if ! grep -q "android.permission.CAMERA" "$MANIFEST"; then
-            sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>' "$MANIFEST"
+            sed -i '/<application/i \    <uses-permission android:name="android.permission.INTERNET"/>\n    <uses-permission android:name="android.permission.CAMERA"/>\n    <uses-permission android:name="android.permission.FLASHLIGHT"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-feature android:name="android.hardware.camera" android:required="false"/>\n    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>\n    <uses-feature android:name="android.hardware.camera.front" android:required="false"/>' "$MANIFEST"
           fi
           if ! grep -q "android:usesCleartextTraffic" "$MANIFEST"; then
             sed -i 's/<application/<application android:usesCleartextTraffic="true"/' "$MANIFEST"
           fi
           sed -i 's/android:label="presensiku_mobile"/android:label="PresensiKu Enterprise"/' "$MANIFEST" || true
 
-          # Inject Proguard Keep Rules for Plugins (SharedPreferences, Geolocator, MobileScanner)
+          # Inject Proguard Keep Rules for Plugins (SharedPreferences, CameraX, MLKit, MobileScanner, Geolocator)
           cat << 'EOF' > android/app/proguard-rules.pro
           -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
           -keep class io.flutter.plugins.sharedpreferences.** { *; }
           -dontwarn io.flutter.plugins.sharedpreferences.**
           -keep class kotlin.coroutines.** { *; }
-          -keep class com.baseflow.geolocator.** { *; }
-          -dontwarn com.baseflow.geolocator.**
+          -keep class androidx.camera.** { *; }
+          -dontwarn androidx.camera.**
+          -keep class com.google.android.gms.internal.mlkit_vision_barcode.** { *; }
+          -keep class com.google.mlkit.** { *; }
+          -dontwarn com.google.mlkit.**
+          -dontwarn com.google.android.gms.internal.mlkit_vision_barcode.**
           -keep class dev.steenbakker.mobile_scanner.** { *; }
           -dontwarn dev.steenbakker.mobile_scanner.**
+          -keep class com.baseflow.geolocator.** { *; }
+          -dontwarn com.baseflow.geolocator.**
           -keep class dev.fluttercommunity.plus.device_info.** { *; }
           -dontwarn dev.fluttercommunity.plus.device_info.**
           EOF

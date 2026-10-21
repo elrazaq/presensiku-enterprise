@@ -29,6 +29,23 @@ class _DispensationScreenState extends State<DispensationScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _loadDispensations();
+  }
+
+  Future<void> _loadDispensations() async {
+    final list = await ApiService.getMyDispensations();
+    if (mounted) {
+      setState(() {
+        _myRequests.clear();
+        _myRequests.addAll(list);
+        _usedQuota = list.length;
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _reasonController.dispose();
     super.dispose();

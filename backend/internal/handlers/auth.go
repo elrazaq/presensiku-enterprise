@@ -148,16 +148,25 @@ func (h *AuthHandler) LoginMobile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var emp models.Employee
-	var deptID, shiftID, devBinding sql.NullString
+	var deptID, shiftID, devBinding, deptName, shiftName sql.NullString
+	var deptLat, deptLng sql.NullFloat64
+	var deptRadius sql.NullInt64
 	query := `
-		SELECT id, company_id, department_id, shift_id, nip, full_name, email, password_hash, role, position_title, device_id_binding, is_active
-		FROM employees
-		WHERE nip = $1 AND is_active = TRUE
+		SELECT e.id, e.company_id, e.department_id, e.shift_id, e.nip, e.full_name, e.email,
+		       e.password_hash, e.role, e.position_title, e.device_id_binding, e.is_active,
+		       COALESCE(d.name, '') AS dept_name,
+		       COALESCE(s.name, '') AS shift_name,
+		       d.latitude, d.longitude, d.radius_meters
+		FROM employees e
+		LEFT JOIN departments d ON e.department_id = d.id
+		LEFT JOIN shifts s ON e.shift_id = s.id
+		WHERE e.nip = $1 AND e.is_active = TRUE
 		LIMIT 1;
 	`
 	err := h.DB.QueryRow(query, req.NIP).Scan(
 		&emp.ID, &emp.CompanyID, &deptID, &shiftID, &emp.NIP, &emp.FullName, &emp.Email,
 		&emp.PasswordHash, &emp.Role, &emp.PositionTitle, &devBinding, &emp.IsActive,
+		&deptName, &shiftName, &deptLat, &deptLng, &deptRadius,
 	)
 
 	if err == sql.ErrNoRows {
@@ -212,11 +221,21 @@ func (h *AuthHandler) LoginMobile(w http.ResponseWriter, r *http.Request) {
 			"token":     token,
 			"device_id": req.DeviceID,
 			"user": map[string]interface{}{
-				"id":        emp.ID,
-				"nip":       emp.NIP,
-				"name":      emp.FullName,
-				"role":      emp.Role,
-				"position":  emp.PositionTitle,
+				"id":                    emp.ID,
+				"nip":                   emp.NIP,
+				"name":                  emp.FullName,
+				"full_name":             emp.FullName,
+				"email":                 emp.Email,
+				"role":                  emp.Role,
+				"position":              emp.PositionTitle,
+				"position_title":        emp.PositionTitle,
+				"department_id":         deptID.String,
+				"department_name":       deptName.String,
+				"shift_id":              shiftID.String,
+				"shift_name":            shiftName.String,
+				"office_lat":            deptLat.Float64,
+				"office_lon":            deptLng.Float64,
+				"allowed_radius_meters": deptRadius.Int64,
 			},
 		},
 	})
@@ -276,9 +295,12 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 
 	var emp models.Employee
 	var deptID, shiftID, devBinding, deptName, shiftName sql.NullString
+	var deptLat, deptLng sql.NullFloat64
+	var deptRadius sql.NullInt64
 	query := `
 		SELECT e.id, e.company_id, e.department_id, e.shift_id, e.nip, e.full_name, e.email, e.role, e.position_title, e.device_id_binding, e.is_active,
-		       d.name AS dept_name, s.name AS shift_name
+		       COALESCE(d.name, '') AS dept_name, COALESCE(s.name, '') AS shift_name,
+		       d.latitude, d.longitude, d.radius_meters
 		FROM employees e
 		LEFT JOIN departments d ON e.department_id = d.id
 		LEFT JOIN shifts s ON e.shift_id = s.id
@@ -287,6 +309,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	err := h.DB.QueryRow(query, claims.EmployeeID).Scan(
 		&emp.ID, &emp.CompanyID, &deptID, &shiftID, &emp.NIP, &emp.FullName, &emp.Email,
 		&emp.Role, &emp.PositionTitle, &devBinding, &emp.IsActive, &deptName, &shiftName,
+		&deptLat, &deptLng, &deptRadius,
 	)
 
 	if err != nil {
@@ -297,15 +320,24 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, models.ApiResponse{
 		Status: "success",
 		Data: map[string]interface{}{
-			"id":             emp.ID,
-			"nip":            emp.NIP,
-			"name":           emp.FullName,
-			"email":          emp.Email,
-			"role":           emp.Role,
-			"position":       emp.PositionTitle,
-			"department":     deptName.String,
-			"shift":          shiftName.String,
-			"bound_device":   devBinding.String,
+			"id":                    emp.ID,
+			"nip":                   emp.NIP,
+			"name":                  emp.FullName,
+			"full_name":             emp.FullName,
+			"email":                 emp.Email,
+			"role":                  emp.Role,
+			"position":              emp.PositionTitle,
+			"position_title":        emp.PositionTitle,
+			"department_id":         deptID.String,
+			"department":            deptName.String,
+			"department_name":       deptName.String,
+			"shift_id":              shiftID.String,
+			"shift":                 shiftName.String,
+			"shift_name":            shiftName.String,
+			"bound_device":          devBinding.String,
+			"office_lat":            deptLat.Float64,
+			"office_lon":            deptLng.Float64,
+			"allowed_radius_meters": deptRadius.Int64,
 		},
 	})
 }

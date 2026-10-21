@@ -29,6 +29,7 @@ func main() {
 	violH := handlers.NewViolationsHandler(db, cfg)
 	adminH := handlers.NewAdminHandler(db, cfg)
 	qrH := handlers.NewQRHandler(db, cfg)
+	dispH := handlers.NewDispensationHandler(db, cfg)
 
 	mux := http.NewServeMux()
 
@@ -69,9 +70,17 @@ func main() {
 	mux.Handle("POST /api/v1/attendance/check-in/selfie", authMw(http.HandlerFunc(attH.CheckInSelfie)))
 	mux.Handle("POST /api/v1/attendance/check-out", authMw(http.HandlerFunc(attH.CheckOut)))
 	mux.Handle("GET /api/v1/attendance/history/my", authMw(http.HandlerFunc(attH.MyHistory)))
+	mux.Handle("GET /api/v1/attendance/my-history", authMw(http.HandlerFunc(attH.MyHistory)))
+
+	// Dispensations Routes ("Surat Sakti" max 3x) & Master Shifts
+	mux.Handle("POST /api/v1/dispensations", authMw(http.HandlerFunc(dispH.SubmitDispensation)))
+	mux.Handle("GET /api/v1/dispensations/my", authMw(http.HandlerFunc(dispH.MyDispensations)))
+	mux.Handle("GET /api/v1/dispensations", authMw(http.HandlerFunc(dispH.MyDispensations)))
+	mux.HandleFunc("GET /api/v1/shifts", dispH.ListShifts)
 
 	// Security Violations Report (Dipicu Mobile saat Deteksi Fake GPS)
 	mux.Handle("POST /api/v1/violations/report", authMw(http.HandlerFunc(violH.ReportViolation)))
+	mux.Handle("POST /api/v1/violations", authMw(http.HandlerFunc(violH.ReportViolation)))
 
 	// --- ADMIN ONLY ROUTES (WAJIB JWT + ROLE ADMIN) ---
 	adminMw := middleware.RequireAdmin

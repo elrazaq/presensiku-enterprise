@@ -11,6 +11,9 @@ class Employee {
   final String? shiftName;
   final String? deviceIdBinding;
   final bool isActive;
+  final double officeLat;
+  final double officeLon;
+  final double allowedRadiusMeters;
 
   Employee({
     required this.id,
@@ -25,6 +28,9 @@ class Employee {
     this.shiftName,
     this.deviceIdBinding,
     this.isActive = true,
+    this.officeLat = 0.885839,
+    this.officeLon = 104.578013,
+    this.allowedRadiusMeters = 100.0,
   });
 
   factory Employee.fromJson(Map<String, dynamic> json) {
@@ -34,13 +40,16 @@ class Employee {
       fullName: json['full_name'] ?? json['name'] ?? '',
       email: json['email'] ?? '',
       role: json['role'] ?? 'EMPLOYEE',
-      positionTitle: json['position_title'],
+      positionTitle: json['position_title'] ?? json['position'],
       departmentId: json['department_id'],
-      departmentName: json['department_name'],
+      departmentName: json['department_name'] ?? json['department'],
       shiftId: json['shift_id'],
-      shiftName: json['shift_name'],
-      deviceIdBinding: json['device_id_binding'],
+      shiftName: json['shift_name'] ?? json['shift'],
+      deviceIdBinding: json['device_id_binding'] ?? json['bound_device'],
       isActive: json['is_active'] ?? true,
+      officeLat: (json['office_lat'] as num?)?.toDouble() ?? 0.885839,
+      officeLon: (json['office_lon'] as num?)?.toDouble() ?? 104.578013,
+      allowedRadiusMeters: (json['allowed_radius_meters'] as num?)?.toDouble() ?? 100.0,
     );
   }
 
@@ -58,6 +67,9 @@ class Employee {
       'shift_name': shiftName,
       'device_id_binding': deviceIdBinding,
       'is_active': isActive,
+      'office_lat': officeLat,
+      'office_lon': officeLon,
+      'allowed_radius_meters': allowedRadiusMeters,
     };
   }
 }

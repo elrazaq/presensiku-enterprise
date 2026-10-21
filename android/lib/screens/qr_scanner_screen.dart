@@ -163,11 +163,19 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.flip_camera_ios_outlined),
+            onPressed: () async {
+              await _scannerController.switchCamera();
+            },
+            tooltip: 'Ganti Kamera',
+          ),
+          IconButton(
             icon: Icon(_isTorchOn ? Icons.flash_on : Icons.flash_off),
             onPressed: () async {
               await _scannerController.toggleTorch();
               setState(() => _isTorchOn = !_isTorchOn);
             },
+            tooltip: 'Flashlight',
           ),
         ],
       ),
@@ -177,6 +185,40 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
           MobileScanner(
             controller: _scannerController,
             onDetect: _handleBarcode,
+            errorBuilder: (context, error, child) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.videocam_off_rounded, color: Colors.amber, size: 52),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Kamera Belum Aktif',
+                        style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Detail status: ${error.errorCode.name}',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
+                      const SizedBox(height: 18),
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Buka / Aktifkan Kamera'),
+                        onPressed: () => _scannerController.start(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.oceanTeal,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
           ),
 
           // 2. Scanner Overlay Box & Guides

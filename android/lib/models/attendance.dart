@@ -4,8 +4,8 @@ class AttendanceRecord {
   final String? employeeName;
   final DateTime checkInTime;
   final DateTime? checkOutTime;
-  final String status; // PRESENT, LATE, ABSENT, SICK, LEAVE
-  final String checkInMethod; // QR_TOTP, SELFIE
+  final String status; // PRESENT, LATE, ABSENT, SICK, LEAVE, HADIR
+  final String checkInMethod; // QR_TOTP, SELFIE, SELFIE_FACE
   final double checkInDistance; // Meter
   final double checkInLatitude;
   final double checkInLongitude;
@@ -13,6 +13,7 @@ class AttendanceRecord {
   final int lateMinutes;
   final String? selfieUrl;
   final String? officeName;
+  final String? notes;
 
   AttendanceRecord({
     required this.id,
@@ -29,26 +30,34 @@ class AttendanceRecord {
     required this.lateMinutes,
     this.selfieUrl,
     this.officeName,
+    this.notes,
   });
 
   factory AttendanceRecord.fromJson(Map<String, dynamic> json) {
     return AttendanceRecord(
-      id: json['id'] ?? '',
-      employeeId: json['employee_id'] ?? '',
-      employeeName: json['employee_name'] ?? json['full_name'],
-      checkInTime: DateTime.tryParse(json['check_in_time'] ?? '') ?? DateTime.now(),
+      id: json['id']?.toString() ?? '',
+      employeeId: json['employee_id']?.toString() ?? '',
+      employeeName: json['employee_name']?.toString() ?? json['full_name']?.toString(),
+      checkInTime: DateTime.tryParse(json['check_in_time']?.toString() ?? '') ?? DateTime.now(),
       checkOutTime: json['check_out_time'] != null
-          ? DateTime.tryParse(json['check_out_time'])
+          ? DateTime.tryParse(json['check_out_time'].toString())
           : null,
-      status: json['status'] ?? 'PRESENT',
-      checkInMethod: json['check_in_method'] ?? 'QR_TOTP',
-      checkInDistance: (json['check_in_distance'] ?? 0.0).toDouble(),
-      checkInLatitude: (json['check_in_latitude'] ?? 0.0).toDouble(),
-      checkInLongitude: (json['check_in_longitude'] ?? 0.0).toDouble(),
-      isLate: json['is_late'] ?? false,
-      lateMinutes: json['late_minutes'] ?? 0,
-      selfieUrl: json['selfie_url'],
-      officeName: json['office_name'] ?? json['department_name'],
+      status: json['status']?.toString() ?? 'HADIR',
+      checkInMethod: json['check_in_method']?.toString() ?? json['attendance_method']?.toString() ?? 'QR_TOTP',
+      checkInDistance: (json['check_in_distance'] as num?)?.toDouble() ??
+          (json['distance_meters'] as num?)?.toDouble() ??
+          0.0,
+      checkInLatitude: (json['check_in_latitude'] as num?)?.toDouble() ??
+          (json['check_in_lat'] as num?)?.toDouble() ??
+          0.0,
+      checkInLongitude: (json['check_in_longitude'] as num?)?.toDouble() ??
+          (json['check_in_lng'] as num?)?.toDouble() ??
+          0.0,
+      isLate: json['is_late'] == true || (json['late_minutes'] as num? ?? 0) > 0,
+      lateMinutes: (json['late_minutes'] as num?)?.toInt() ?? 0,
+      selfieUrl: json['selfie_url']?.toString(),
+      officeName: json['office_name']?.toString() ?? json['department_name']?.toString(),
+      notes: json['notes']?.toString(),
     );
   }
 }

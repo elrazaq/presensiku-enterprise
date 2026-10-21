@@ -426,18 +426,23 @@ func (h *AttendanceHandler) MyHistory(w http.ResponseWriter, r *http.Request) {
 
 		item := map[string]interface{}{
 			"id":                id,
+			"employee_id":       claims.EmployeeID,
 			"date":              date,
 			"status":            status,
 			"attendance_method": method,
+			"check_in_method":   method,
+			"check_in_distance": dist,
 			"distance_meters":   dist,
 			"selfie_url":        selfieURL.String,
 			"notes":             notes.String,
 		}
 		if checkIn != nil {
-			item["check_in_time"] = checkIn.Format("15:04:05")
+			item["check_in_time"] = checkIn.Format(time.RFC3339)
+			item["check_in_time_str"] = checkIn.Format("15:04:05")
 		}
 		if checkOut != nil {
-			item["check_out_time"] = checkOut.Format("15:04:05")
+			item["check_out_time"] = checkOut.Format(time.RFC3339)
+			item["check_out_time_str"] = checkOut.Format("15:04:05")
 		}
 
 		logs = append(logs, item)

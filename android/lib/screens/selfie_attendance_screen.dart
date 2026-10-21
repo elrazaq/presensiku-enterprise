@@ -1,34 +1,50 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../core/constants.dart';
+import '../models/employee.dart';
 import '../services/api_service.dart';
 import '../services/location_service.dart';
 import 'attendance_result_modal.dart';
 
 class SelfieAttendanceScreen extends StatefulWidget {
-  const SelfieAttendanceScreen({super.key});
+  final Employee? employee;
+  const SelfieAttendanceScreen({super.key, this.employee});
 
   @override
   State<SelfieAttendanceScreen> createState() => _SelfieAttendanceScreenState();
 }
 
 class _SelfieAttendanceScreenState extends State<SelfieAttendanceScreen> {
+  final MobileScannerController _selfieController = MobileScannerController(
+    facing: CameraFacing.front,
+    detectionSpeed: DetectionSpeed.noDuplicates,
+  );
+
   bool _isLoadingGps = true;
   bool _isSubmitting = false;
   Position? _currentPosition;
   String _gpsStatus = 'Mencari koordinat presisi...';
   bool _isInGeofence = false;
+  bool _isTorchOn = false;
 
-  // Koordinat acuan kantor (Ruang Server & IT)
-  final double officeLat = -6.2088;
-  final double officeLon = 106.8456;
-  final double allowedRadiusMeters = 30.0;
+  // Koordinat acuan kantor dinamis sesuai penempatan kerja pegawai
+  double get officeLat => widget.employee?.officeLat ?? 0.885839;
+  double get officeLon => widget.employee?.officeLon ?? 104.578013;
+  double get allowedRadiusMeters => widget.employee?.allowedRadiusMeters ?? 100.0;
+  String get officeDeptName => widget.employee?.departmentName ?? 'Ruang Server & IT';
 
   @override
   void initState() {
     super.initState();
     _checkLocation();
+  }
+
+  @override
+  void dispose() {
+    _selfieController.dispose();
+    super.dispose();
   }
 
   Future<void> _checkLocation() async {
@@ -51,7 +67,7 @@ class _SelfieAttendanceScreenState extends State<SelfieAttendanceScreen> {
         _isInGeofence = dist <= allowedRadiusMeters;
         _isLoadingGps = false;
         _gpsStatus = _isInGeofence
-            ? 'Lokasi Valid (${dist.toStringAsFixed(1)}m dari Titik Kantor)'
+            ? 'Lokasi Sah (${dist.toStringAsFixed(1)}m dari $officeDeptName)'
             : 'Di Luar Radius (${dist.toStringAsFixed(1)}m, Maks. ${allowedRadiusMeters.toInt()}m)';
       });
     } on MockGpsDetectedException catch (e) {
@@ -111,7 +127,7 @@ class _SelfieAttendanceScreenState extends State<SelfieAttendanceScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      // Dummy selfie string avatar (base64 image placeholder)
+      // Selfie string image placeholder / Cloudinary upload trigger
       final dummyBase64Selfie =
           'data:image/jpeg;base64,${base64Encode(utf8.encode('PRESENSI_SELFIE_TIMESTAMP_${DateTime.now().toIso8601String()}'))}';
 
@@ -129,12 +145,12 @@ class _SelfieAttendanceScreenState extends State<SelfieAttendanceScreen> {
         AttendanceResultModal.show(context, record: res.data!);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res.message), backgroundColor: AppColors.wine),
+          SnackBar(content: Text(res.message), backgroundColor: AppColors.wine, behavior: SnackBarBehavior.floating),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.wine),
+        SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.wine, behavior: SnackBarBehavior.floating),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -150,6 +166,11 @@ class _SelfieAttendanceScreenState extends State<SelfieAttendanceScreen> {
         foregroundColor: Colors.white,
         title: const Text('Presensi Foto Wajah (Selfie)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.flip_camera_ios_outlined),
+            onPressed: () => _selfieController.switchCamera(),
+            tooltip: 'Ganti Kamera (Depan / Belakang)',
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _isLoadingGps ? null : _checkLocation,
@@ -194,13 +215,13 @@ class _SelfieAttendanceScreenState extends State<SelfieAttendanceScreen> {
             ),
           ),
 
-          // 2. Camera View & Facial Circular Guide
+          // 2. Real Live Camera View & Facial Circular Guide
           Expanded(
             child: Center(
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Circular Facial Guide Border
+                  // Circular Facial Guide with Live Camera
                   Container(
                     width: 280,
                     height: 280,
@@ -218,12 +239,43 @@ class _SelfieAttendanceScreenState extends State<SelfieAttendanceScreen> {
                       ],
                     ),
                     child: ClipOval(
-                      child: Container(
-                        color: const Color(0xFF162D50),
-                        child: Icon(
-                          Icons.face_retouching_natural_rounded,
-                          size: 160,
-                          color: Colors.white.withOpacity(0.4),
+                      child: SizedBox(
+                        width: 280,
+                        height: 280,
+                        child: MobileScanner(
+                          controller: _selfieController,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, child) {
+                            return Container(
+                              color: const Color(0xFF162D50),
+                              child: Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16.0),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.videocam_off_rounded, size: 48, color: Colors.amber),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'Kamera: ${error.errorCode.name}',
+                                        style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      ElevatedButton(
+                                        onPressed: () => _selfieController.start(),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: AppColors.oceanTeal,
+                                          foregroundColor: Colors.white,
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                        child: const Text('Aktifkan'),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -260,8 +312,12 @@ class _SelfieAttendanceScreenState extends State<SelfieAttendanceScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.flash_off, color: Colors.white70),
-                    onPressed: () {},
+                    icon: Icon(_isTorchOn ? Icons.flash_on : Icons.flash_off, color: Colors.white70),
+                    onPressed: () async {
+                      await _selfieController.toggleTorch();
+                      setState(() => _isTorchOn = !_isTorchOn);
+                    },
+                    tooltip: 'Flashlight',
                   ),
                   // Big Shutter Button
                   GestureDetector(
@@ -283,14 +339,19 @@ class _SelfieAttendanceScreenState extends State<SelfieAttendanceScreen> {
                       ),
                       child: Center(
                         child: _isSubmitting
-                            ? const CircularProgressIndicator(color: Colors.white, strokeWidth: 3)
+                            ? const SizedBox(
+                                width: 26,
+                                height: 26,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                              )
                             : const Icon(Icons.camera_alt, color: Colors.white, size: 32),
                       ),
                     ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.flip_camera_ios, color: Colors.white70),
-                    onPressed: () {},
+                    onPressed: () => _selfieController.switchCamera(),
+                    tooltip: 'Ganti Kamera Depan / Belakang',
                   ),
                 ],
               ),

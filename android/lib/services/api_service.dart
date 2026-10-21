@@ -221,12 +221,18 @@ class ApiService {
 
       if (token == null) return [];
 
-      final res = await http.get(
+      var res = await http.get(
         Uri.parse('$baseUrl/attendance/my-history'),
-        headers: {
-          'Authorization': 'Bearer $token',
-        },
+        headers: {'Authorization': 'Bearer $token'},
       );
+
+      // Fallback jika route alternate digunakan
+      if (res.statusCode == 404) {
+        res = await http.get(
+          Uri.parse('$baseUrl/attendance/history/my'),
+          headers: {'Authorization': 'Bearer $token'},
+        );
+      }
 
       if (res.statusCode == 200) {
         final Map<String, dynamic> body = jsonDecode(res.body);
@@ -238,6 +244,54 @@ class ApiService {
       }
     } catch (_) {}
     return [];
+  }
+
+  /// Ambil Riwayat Pengajuan Dispensasi Pegawai
+  static Future<List<DispensationRequest>> getMyDispensations() async {
+    try {
+      final baseUrl = await getBaseUrl();
+      final token = await StorageService.getToken();
+      if (token == null) return [];
+
+      final res = await http.get(
+        Uri.parse('$baseUrl/dispensations/my'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (res.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(res.body);
+        if (body['data'] is List) {
+          return (body['data'] as List)
+              .map((item) => DispensationRequest.fromJson(item))
+              .toList();
+        }
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  /// Sinkronisasi Data Profil & Penempatan Kerja Pegawai Terbaru dari Server
+  static Future<Employee?> getMe() async {
+    try {
+      final baseUrl = await getBaseUrl();
+      final token = await StorageService.getToken();
+      if (token == null) return null;
+
+      final res = await http.get(
+        Uri.parse('$baseUrl/auth/me'),
+        headers: {'Authorization': 'Bearer $token'},
+      );
+
+      if (res.statusCode == 200) {
+        final Map<String, dynamic> body = jsonDecode(res.body);
+        if (body['data'] != null && body['data'] is Map<String, dynamic>) {
+          final emp = Employee.fromJson(body['data']);
+          await StorageService.saveUser(emp);
+          return emp;
+        }
+      }
+    } catch (_) {}
+    return null;
   }
 
   /// 5. Mengambil Data Shift Pegawai
