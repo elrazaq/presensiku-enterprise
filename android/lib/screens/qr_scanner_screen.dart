@@ -6,7 +6,8 @@ import '../services/location_service.dart';
 import 'attendance_result_modal.dart';
 
 class QrScannerScreen extends StatefulWidget {
-  const QrScannerScreen({super.key});
+  final bool isCheckOut;
+  const QrScannerScreen({super.key, this.isCheckOut = false});
 
   @override
   State<QrScannerScreen> createState() => _QrScannerScreenState();
@@ -20,6 +21,13 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
 
   bool _isProcessing = false;
   bool _isTorchOn = false;
+  late bool _isCheckOutMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _isCheckOutMode = widget.isCheckOut;
+  }
 
   @override
   void dispose() {
@@ -45,19 +53,30 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       // 1. Ambil Lokasi GPS & Periksa Proteksi Anti-Mock GPS
       final position = await LocationService.getCurrentPositionWithAntiMock();
 
-      // 2. Kirim Check-In ke Server
-      final res = await ApiService.checkIn(
-        method: 'QR_TOTP',
-        qrPayload: rawValue,
-        latitude: position.latitude,
-        longitude: position.longitude,
-      );
+      // 2. Kirim Check-In atau Check-Out ke Server
+      final res = _isCheckOutMode
+          ? await ApiService.checkOut(
+              qrPayload: rawValue,
+              latitude: position.latitude,
+              longitude: position.longitude,
+            )
+          : await ApiService.checkIn(
+              method: 'QR_TOTP',
+              qrPayload: rawValue,
+              latitude: position.latitude,
+              longitude: position.longitude,
+            );
 
       if (!mounted) return;
 
       if (res.success && res.data != null) {
         Navigator.pop(context);
-        AttendanceResultModal.show(context, record: res.data!);
+        AttendanceResultModal.show(
+          context,
+          record: res.data!,
+          title: _isCheckOutMode ? 'Presensi Pulang Berhasil' : 'Presensi Masuk Berhasil',
+          isCheckOut: _isCheckOutMode,
+        );
       } else {
         _showErrorDialog(
           title: 'Presensi Ditolak',
@@ -157,9 +176,9 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text(
-          'Scan Dynamic QR Kiosk',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        title: Text(
+          _isCheckOutMode ? 'Scan QR Kiosk (Pulang)' : 'Scan QR Kiosk (Masuk)',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
@@ -219,6 +238,79 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
                 ),
               );
             },
+          ),
+
+          // 1.5. Mode Selector Toggle (Absen Masuk vs Absen Pulang)
+          Positioned(
+            top: 16,
+            left: 24,
+            right: 24,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.65),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _isCheckOutMode = false),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: !_isCheckOutMode ? AppColors.oceanTeal : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.login_rounded, size: 16, color: !_isCheckOutMode ? Colors.white : Colors.white60),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Absen Masuk',
+                              style: TextStyle(
+                                color: !_isCheckOutMode ? Colors.white : Colors.white60,
+                                fontWeight: !_isCheckOutMode ? FontWeight.bold : FontWeight.w500,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _isCheckOutMode = true),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _isCheckOutMode ? AppColors.wine : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.logout_rounded, size: 16, color: _isCheckOutMode ? Colors.white : Colors.white60),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Absen Pulang',
+                              style: TextStyle(
+                                color: _isCheckOutMode ? Colors.white : Colors.white60,
+                                fontWeight: _isCheckOutMode ? FontWeight.bold : FontWeight.w500,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
 
           // 2. Scanner Overlay Box & Guides

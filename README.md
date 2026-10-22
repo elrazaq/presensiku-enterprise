@@ -44,6 +44,52 @@ Berikut adalah dokumentasi visual dari modul-modul inti yang telah diimplementas
 
 ---
 
+## 📱 Tangkapan Layar Aplikasi Mobile Pegawai (Android Flutter)
+
+Berikut adalah dokumentasi antarmuka aplikasi Android resmi pegawai (*native Flutter*) yang dioperasikan pada smartphone pegawai:
+
+### 1. Autentikasi Pegawai & Device ID Hardware Binding
+![Login Pegawai & Hardware Binding](docs/screenshots/07-mobile-login.png)
+* **Penjelasan:** Layar login aman dengan NIP dan kata sandi. Saat pegawai pertama kali login, sistem secara otomatis mengikat (*binding*) identitas unik hardware smartphone (*Device ID / Fingerprint*) ke akun pegawai tersebut. Apabila pegawai mencoba login menggunakan perangkat ponsel lain tanpa izin HRD, sistem langsung menolak akses untuk mencegah praktik titip absen antar rekan kerja.
+
+---
+
+### 2. Beranda Utama Pegawai & Kartu Shift Dinamis
+![Beranda Utama Mobile](docs/screenshots/08-mobile-home.png)
+* **Penjelasan:** Pusat kendali harian pegawai yang menyajikan informasi shift aktif, batas jam masuk (*cut-off* 12:00 WIB), indikator status kehadiran (*Belum Masuk, Aktif Bekerja, atau Selesai Pulang*), serta tombol aksi langsung. Dilengkapi 8 menu cepat: Absen QR, Foto Selfie, Dispensasi, Riwayat Kehadiran, Informasi Geofence Radius, Jadwal Shift, Validasi Perangkat, dan Kontak Layanan HRD.
+
+---
+
+### 3. Pemindai Dynamic QR Kiosk & Toggle Mode Masuk / Pulang
+![Pemindai QR Kiosk](docs/screenshots/09-mobile-qr-scanner.png)
+* **Penjelasan:** Antarmuka pemindai berkecepatan tinggi yang dilengkapi penyeleksi fleksibel `[ Absen Masuk ]` dan `[ Absen Pulang ]`. Sistem memeriksa validitas tanda tangan kriptografis HMAC-SHA256 TOTP dari QR Kiosk kantor sekaligus mengukur jarak radius pegawai secara real-time via satelit GPS.
+
+---
+
+### 4. Presensi Foto Wajah (Live Selfie) & Watermarking Cloudinary
+![Presensi Selfie Wajah](docs/screenshots/10-mobile-selfie-cam.png)
+* **Penjelasan:** Modul presensi biometrik wajah pegawai dengan validasi liveness kamera depan. Gambar foto diproses dengan metadata watermark (Nama Pegawai, NIP, serta stempel waktu presisi) dan disimpan secara otomatis ke storage **Cloudinary CDN** untuk verifikasi forensik tim HRD. Terdapat sakelar mode untuk memilih Absen Masuk maupun Absen Pulang.
+
+---
+
+### 5. Formulir Pengajuan Dispensasi Keterlambatan / Izin
+![Formulir Dispensasi](docs/screenshots/11-mobile-dispensasi.png)
+* **Penjelasan:** Layar permohonan izin resmi bagi pegawai yang datang terlambat melebihi batas cut-off setengah hari (jam 12:00) atau berhalangan hadir. Pegawai dapat memilih jenis izin (*Terlambat / Izin Resmi / Keperluan Mendesak*), mencantumkan alasan rinci, serta melihat sisa kuota dispensasi maksimal (3 kali per periode kerja).
+
+---
+
+### 6. Riwayat Presensi Harian & Audit Geotagging
+![Riwayat Presensi Mobile](docs/screenshots/12-mobile-riwayat.png)
+* **Penjelasan:** Daftar catatan kehadiran historis pegawai yang menampilkan jam masuk dan jam pulang, status ketepatan waktu (*Tepat Waktu / Terlambat*), jarak meter dari kantor, serta label lokasi penempatan kerja.
+
+---
+
+### 7. Profil Pegawai, Penempatan Kerja & Status Integritas Perangkat
+![Profil & Perangkat](docs/screenshots/13-mobile-profil.png)
+* **Penjelasan:** Menampilkan data identitas resmi pegawai, jabatan, unit/departemen kerja, nama kantor penempatan beserta koordinat latitude-longitude dan radius toleransi geofence (misal 100 meter). Halaman ini juga memperlihatkan status verifikasi Device ID yang terikat aktif pada database enterprise.
+
+---
+
 ## 🛠️ Arsitektur & Teknologi
 
 * **Backend Engine:** Golang (Gin Framework untuk REST API & Google gRPC Server pada port `50051`).

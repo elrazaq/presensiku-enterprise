@@ -23,7 +23,9 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   bool _isCheckedIn = false;
+  bool _isCheckedOut = false;
   String? _checkInTimeStr;
+  String? _checkOutTimeStr;
   bool _isCheckingOut = false;
   Shift? _currentShift;
   String _attendanceMethod = 'BOTH'; // BOTH, QR_ONLY, SELFIE_ONLY
@@ -55,17 +57,35 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => _currentShift = shifts.first);
     }
 
-    // 3. Ambil Status Hari Ini
+    // 3. Ambil Status Hari Ini / Shift Aktif
     final history = await ApiService.getMyAttendanceHistory();
     if (history.isNotEmpty && mounted) {
       final today = history.first;
       final now = DateTime.now();
-      if (today.checkInTime.day == now.day &&
+      final diffHours = now.difference(today.checkInTime).inHours.abs();
+      final isSameCalendarDay = today.checkInTime.day == now.day &&
           today.checkInTime.month == now.month &&
-          today.checkInTime.year == now.year) {
+          today.checkInTime.year == now.year;
+
+      if (isSameCalendarDay || (diffHours < 20 && today.checkOutTime == null)) {
         setState(() {
-          _isCheckedIn = true;
           _checkInTimeStr = DateFormat('HH:mm').format(today.checkInTime);
+          if (today.checkOutTime != null) {
+            _isCheckedIn = false;
+            _isCheckedOut = true;
+            _checkOutTimeStr = DateFormat('HH:mm').format(today.checkOutTime!);
+          } else {
+            _isCheckedIn = true;
+            _isCheckedOut = false;
+            _checkOutTimeStr = null;
+          }
+        });
+      } else {
+        setState(() {
+          _isCheckedIn = false;
+          _isCheckedOut = false;
+          _checkInTimeStr = null;
+          _checkOutTimeStr = null;
         });
       }
     }
@@ -73,11 +93,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _handlePrimaryAction() {
     if (_attendanceMethod == 'SELFIE_ONLY') {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => SelfieAttendanceScreen(employee: _currentEmployee)))
-          .then((_) => _loadShiftAndTodayStatus());
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SelfieAttendanceScreen(
+            employee: _currentEmployee,
+            isCheckOut: _isCheckedIn,
+          ),
+        ),
+      ).then((_) => _loadShiftAndTodayStatus());
     } else {
-      Navigator.push(context, MaterialPageRoute(builder: (_) => const QrScannerScreen()))
-          .then((_) => _loadShiftAndTodayStatus());
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => QrScannerScreen(isCheckOut: _isCheckedIn),
+        ),
+      ).then((_) => _loadShiftAndTodayStatus());
     }
   }
 
@@ -109,6 +140,24 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _handleCheckOut() async {
+    if (_attendanceMethod == 'SELFIE_ONLY') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SelfieAttendanceScreen(employee: _currentEmployee, isCheckOut: true),
+        ),
+      ).then((_) => _loadShiftAndTodayStatus());
+      return;
+    } else if (_attendanceMethod == 'QR_ONLY') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => const QrScannerScreen(isCheckOut: true),
+        ),
+      ).then((_) => _loadShiftAndTodayStatus());
+      return;
+    }
+
     setState(() => _isCheckingOut = true);
     try {
       final pos = await LocationService.getCurrentPositionWithAntiMock();
@@ -126,9 +175,7 @@ class _HomeScreenState extends State<HomeScreen> {
           title: 'Presensi Pulang Berhasil',
           isCheckOut: true,
         );
-        setState(() {
-          _isCheckedIn = false;
-        });
+        _loadShiftAndTodayStatus();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(res.message), backgroundColor: AppColors.wine),
@@ -404,6 +451,26 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                                   : const Text('Absen Pulang', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                             )
+                          else if (_isCheckedOut)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.18),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white24),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.check_circle_rounded, color: AppColors.cream, size: 14),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Pulang ${_checkOutTimeStr ?? ""}',
+                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            )
                           else
                             ElevatedButton.icon(
                               onPressed: _handlePrimaryAction,
@@ -450,7 +517,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         if (_attendanceMethod == 'SELFIE_ONLY') {
                           _showRestrictedMethodDialog('Scan Barcode / QR Kiosk', 'Foto Wajah (Selfie)');
                         } else {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => const QrScannerScreen())).then((_) => _loadShiftAndTodayStatus());
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => QrScannerScreen(isCheckOut: _isCheckedIn),
+                            ),
+                          ).then((_) => _loadShiftAndTodayStatus());
                         }
                       },
                     ),
@@ -462,7 +534,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         if (_attendanceMethod == 'QR_ONLY') {
                           _showRestrictedMethodDialog('Foto Wajah (Selfie)', 'Scan Barcode / QR Kiosk');
                         } else {
-                          Navigator.push(context, MaterialPageRoute(builder: (_) => SelfieAttendanceScreen(employee: _currentEmployee))).then((_) => _loadShiftAndTodayStatus());
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SelfieAttendanceScreen(
+                                employee: _currentEmployee,
+                                isCheckOut: _isCheckedIn,
+                              ),
+                            ),
+                          ).then((_) => _loadShiftAndTodayStatus());
                         }
                       },
                     ),

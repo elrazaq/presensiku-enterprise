@@ -187,6 +187,8 @@ class ApiService {
   static Future<ApiResponse<AttendanceRecord>> checkOut({
     required double latitude,
     required double longitude,
+    String? qrPayload,
+    String? selfieBase64,
   }) async {
     try {
       final baseUrl = await getBaseUrl();
@@ -197,6 +199,22 @@ class ApiService {
         return ApiResponse(success: false, message: 'Sesi login telah habis.');
       }
 
+      final payload = <String, dynamic>{
+        'latitude': latitude,
+        'longitude': longitude,
+        'device_id': deviceId,
+        'type': 'CHECK_OUT',
+        'method': selfieBase64 != null ? 'SELFIE' : (qrPayload != null ? 'QR_TOTP' : 'CHECK_OUT'),
+      };
+      if (qrPayload != null) {
+        payload['qr_payload'] = qrPayload;
+        payload['qr_token'] = qrPayload;
+      }
+      if (selfieBase64 != null) {
+        payload['selfie_base64'] = selfieBase64;
+        payload['image_base64'] = selfieBase64;
+      }
+
       final res = await http.post(
         Uri.parse('$baseUrl/attendance/check-out'),
         headers: {
@@ -204,11 +222,7 @@ class ApiService {
           'Authorization': 'Bearer $token',
           'X-Device-ID': deviceId,
         },
-        body: jsonEncode({
-          'latitude': latitude,
-          'longitude': longitude,
-          'device_id': deviceId,
-        }),
+        body: jsonEncode(payload),
       );
 
       Map<String, dynamic> body;

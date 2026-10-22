@@ -37,6 +37,7 @@ func (h *AttendanceHandler) CheckInUnified(w http.ResponseWriter, r *http.Reques
 
 	var probe struct {
 		Method       string `json:"method"`
+		Type         string `json:"type"`
 		QRToken      string `json:"qr_token"`
 		QRPayload    string `json:"qr_payload"`
 		ImageBase64  string `json:"image_base64"`
@@ -47,7 +48,14 @@ func (h *AttendanceHandler) CheckInUnified(w http.ResponseWriter, r *http.Reques
 	// Recreate Body for target handler
 	r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
+	reqType := strings.ToUpper(strings.TrimSpace(probe.Type))
 	method := strings.ToUpper(strings.TrimSpace(probe.Method))
+
+	if reqType == "CHECK_OUT" || method == "CHECK_OUT" || strings.Contains(method, "OUT") {
+		h.CheckOut(w, r)
+		return
+	}
+
 	if method == "SELFIE" || method == "SELFIE_FACE" || ((probe.SelfieBase64 != "" || probe.ImageBase64 != "") && probe.QRToken == "" && probe.QRPayload == "") {
 		h.CheckInSelfie(w, r)
 		return
@@ -425,42 +433,119 @@ func (h *AttendanceHandler) CheckInSelfie(w http.ResponseWriter, r *http.Request
 func (h *AttendanceHandler) CheckOut(w http.ResponseWriter, r *http.Request) {
 	claims, ok := r.Context().Value(middleware.UserContextKey).(*middleware.JWTClaims)
 	if !ok || claims == nil {
-		writeJSON(w, http.StatusUnauthorized, models.ApiResponse{Status: "error", Error: "Sesi tidak valid"})
+		writeJSON(w, http.StatusUnauthorized, models.ApiResponse{Status: "error", Message: "Sesi tidak valid", Error: "Sesi tidak valid"})
 		return
 	}
 
-	var req models.CheckOutRequest
+	var req struct {
+		Latitude     float64 `json:"latitude"`
+		Longitude    float64 `json:"longitude"`
+		IsMocked     bool    `json:"is_mocked"`
+		Notes        string  `json:"notes"`
+		ImageBase64  string  `json:"image_base64"`
+		SelfieBase64 string  `json:"selfie_base64"`
+		DeviceID     string  `json:"device_id"`
+		QRPayload    string  `json:"qr_payload"`
+	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	if req.ImageBase64 == "" && req.SelfieBase64 != "" {
+		req.ImageBase64 = req.SelfieBase64
+	}
 
 	today := time.Now().Format("2006-01-02")
 	now := time.Now()
 
+	// Upload foto selfie kepulangan ke Cloudinary jika dilampirkan
+	var selfieURL string
+	if req.ImageBase64 != "" {
+		var cloudName, apiKey, apiSecret, uploadPreset string
+		_ = h.DB.QueryRow("SELECT value FROM app_settings WHERE key = 'cloudinary_cloud_name'").Scan(&cloudName)
+		_ = h.DB.QueryRow("SELECT value FROM app_settings WHERE key = 'cloudinary_api_key'").Scan(&apiKey)
+		_ = h.DB.QueryRow("SELECT value FROM app_settings WHERE key = 'cloudinary_api_secret'").Scan(&apiSecret)
+		_ = h.DB.QueryRow("SELECT value FROM app_settings WHERE key = 'cloudinary_upload_preset'").Scan(&uploadPreset)
+
+		if cloudName != "" {
+			cURL, err := services.UploadSelfieToCloudinary(req.ImageBase64, cloudName, apiKey, apiSecret, uploadPreset)
+			if err == nil && cURL != "" {
+				selfieURL = cURL
+			}
+		}
+	}
+
+	notes := req.Notes
+	if notes == "" {
+		notes = "Presensi Pulang Sah"
+	}
+	if selfieURL != "" {
+		notes = fmt.Sprintf("%s (Foto: %s)", notes, selfieURL)
+	}
+
+	// 1. Coba update log hari ini yang belum check-out
 	res, err := h.DB.Exec(`
 		UPDATE attendance_logs 
 		SET check_out_time = $1, notes = COALESCE(notes, '') || ' | Pulang: ' || $2
-		WHERE employee_id = $3 AND attendance_date = $4 AND check_in_time IS NOT NULL;
-	`, now, req.Notes, claims.EmployeeID, today)
+		WHERE employee_id = $3 AND attendance_date = $4 AND check_in_time IS NOT NULL AND check_out_time IS NULL;
+	`, now, notes, claims.EmployeeID, today)
 
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, models.ApiResponse{Status: "error", Error: "Gagal mencatat jam pulang"})
+		writeJSON(w, http.StatusInternalServerError, models.ApiResponse{Status: "error", Message: "Gagal mencatat jam pulang", Error: "Gagal mencatat jam pulang"})
 		return
 	}
 
 	rows, _ := res.RowsAffected()
+
+	// 2. Jika tidak ada log hari ini (misal absensi masuk sebelum tengah malam, dan pulang lewat tengah malam / shift malam),
+	// update log terbuka paling mutakhir dalam rentang 24 jam terakhir
+	if rows == 0 {
+		res, err = h.DB.Exec(`
+			UPDATE attendance_logs 
+			SET check_out_time = $1, notes = COALESCE(notes, '') || ' | Pulang Shift Malam: ' || $2
+			WHERE id = (
+				SELECT id FROM attendance_logs 
+				WHERE employee_id = $3 AND check_in_time IS NOT NULL AND check_out_time IS NULL
+				ORDER BY check_in_time DESC LIMIT 1
+			);
+		`, now, notes, claims.EmployeeID)
+		if err == nil {
+			rows, _ = res.RowsAffected()
+		}
+	}
+
+	// 3. Fallback: update log hari ini meskipun sudah pernah checkout (koreksi jam pulang)
+	if rows == 0 {
+		res, err = h.DB.Exec(`
+			UPDATE attendance_logs 
+			SET check_out_time = $1, notes = COALESCE(notes, '') || ' | Update Pulang: ' || $2
+			WHERE employee_id = $3 AND attendance_date = $4 AND check_in_time IS NOT NULL;
+		`, now, notes, claims.EmployeeID, today)
+		if err == nil {
+			rows, _ = res.RowsAffected()
+		}
+	}
+
 	if rows == 0 {
 		writeJSON(w, http.StatusBadRequest, models.ApiResponse{
-			Status: "error",
-			Error:  "Belum ada catatan presensi masuk untuk hari ini. Lakukan Check-In terlebih dahulu!",
+			Status:  "error",
+			Message: "Belum ada catatan presensi masuk yang aktif. Silakan lakukan Presensi Masuk terlebih dahulu!",
+			Error:   "Belum ada catatan presensi masuk yang aktif. Silakan lakukan Presensi Masuk terlebih dahulu!",
 		})
 		return
 	}
 
 	writeJSON(w, http.StatusOK, models.ApiResponse{
 		Status:  "success",
-		Message: "Check-Out Pulang Kerja Berhasil Dicatat. Hati-hati di jalan!",
+		Message: "Presensi Pulang Kerja Berhasil Dicatat. Hati-hati di jalan!",
 		Data: map[string]interface{}{
-			"check_out_time": now.Format("15:04:05"),
-			"date":           today,
+			"id":                today,
+			"employee_id":       claims.EmployeeID,
+			"date":              today,
+			"check_out_time":    now.Format(time.RFC3339),
+			"check_out_time_str": now.Format("15:04:05"),
+			"status":            "HADIR",
+			"attendance_method": "SELFIE_FACE",
+			"selfie_url":        selfieURL,
+			"notes":             notes,
 		},
 	})
 }
