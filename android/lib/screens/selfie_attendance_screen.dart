@@ -156,7 +156,7 @@ class _SelfieAttendanceScreenState extends State<SelfieAttendanceScreen> {
           text: '$typeStr VERIFIED\n$empName\nNIP: $empNip\n$timeStr WIB',
           style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold, height: 1.4),
         ),
-        textDirection: TextDirection.ltr,
+        textDirection: ui.TextDirection.ltr,
         textAlign: TextAlign.center,
       );
       tp.layout(maxWidth: 440);
