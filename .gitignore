@@ -14,6 +14,18 @@ IMPLEMENTATION_PLAN.md
 *.plan.md
 scratch/
 check_db.js
+AGENTS.md
+GEMINI.md
+.agents/
+.gemini/
+docs/architecture.md
+docs/decisions.md
+docs/roadmap.md
+docs/setup.md
+docs/skills.md
+docs/m*.md
+docs/milestone*.md
+docs/*master-plan*.md
 
 # 3. Binaries & Compiled Executables
 *.exe
